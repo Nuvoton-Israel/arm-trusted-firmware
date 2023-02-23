@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2021, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2015-2022, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -79,6 +79,7 @@
  *   - SCP TZC DRAM: If present, DRAM reserved for SCP use
  *   - L1 GPT DRAM: Reserved for L1 GPT if RME is enabled
  *   - REALM DRAM: Reserved for Realm world if RME is enabled
+ *   - TF-A <-> RMM SHARED: Area shared for communication between TF-A and RMM
  *   - AP TZC DRAM: The remaining TZC secured DRAM reserved for AP use
  *
  *              RME enabled(64MB)                RME not enabled(16MB)
@@ -87,11 +88,16 @@
  *              |  AP TZC (~28MB)  |             |  AP TZC (~14MB) |
  *              --------------------             -------------------
  *              |                  |             |                 |
- *              |  REALM (32MB)    |             |  EL3 TZC (2MB)  |
- *              --------------------             -------------------
- *              |                  |             |                 |
- *              |  EL3 TZC (3MB)   |             |    SCP TZC      |
- *              --------------------  0xFFFF_FFFF-------------------
+ *              |   REALM (RMM)    |             |  EL3 TZC (2MB)  |
+ *              |   (32MB - 4KB)   |             -------------------
+ *              --------------------             |                 |
+ *              |                  |             |    SCP TZC      |
+ *              |   TF-A <-> RMM   |  0xFFFF_FFFF-------------------
+ *              |   SHARED (4KB)   |
+ *              --------------------
+ *              |                  |
+ *              |  EL3 TZC (3MB)   |
+ *              --------------------
  *              | L1 GPT + SCP TZC |
  *              |       (~1MB)     |
  *  0xFFFF_FFFF --------------------
@@ -106,12 +112,17 @@
  */
 #define ARM_EL3_TZC_DRAM1_SIZE		UL(0x00300000) /* 3MB */
 #define ARM_L1_GPT_SIZE			UL(0x00100000) /* 1MB */
-#define ARM_REALM_SIZE			UL(0x02000000) /* 32MB */
+
+/* 32MB - ARM_EL3_RMM_SHARED_SIZE */
+#define ARM_REALM_SIZE			(UL(0x02000000) -		\
+						ARM_EL3_RMM_SHARED_SIZE)
+#define ARM_EL3_RMM_SHARED_SIZE		(PAGE_SIZE)    /* 4KB */
 #else
 #define ARM_TZC_DRAM1_SIZE		UL(0x01000000) /* 16MB */
 #define ARM_EL3_TZC_DRAM1_SIZE		UL(0x00200000) /* 2MB */
 #define ARM_L1_GPT_SIZE			UL(0)
 #define ARM_REALM_SIZE			UL(0)
+#define ARM_EL3_RMM_SHARED_SIZE		UL(0)
 #endif /* ENABLE_RME */
 
 #define ARM_SCP_TZC_DRAM1_BASE		(ARM_DRAM1_BASE +		\
@@ -128,13 +139,20 @@
 #define ARM_L1_GPT_END			(ARM_L1_GPT_ADDR_BASE +		\
 					ARM_L1_GPT_SIZE - 1U)
 
-#define ARM_REALM_BASE			(ARM_DRAM1_BASE +		\
-					ARM_DRAM1_SIZE -		\
-					(ARM_SCP_TZC_DRAM1_SIZE +	\
-					ARM_EL3_TZC_DRAM1_SIZE +	\
-					ARM_REALM_SIZE +		\
-					ARM_L1_GPT_SIZE))
+#define ARM_REALM_BASE			(ARM_EL3_RMM_SHARED_BASE -	\
+					 ARM_REALM_SIZE)
+
 #define ARM_REALM_END                   (ARM_REALM_BASE + ARM_REALM_SIZE - 1U)
+
+#define ARM_EL3_RMM_SHARED_BASE		(ARM_DRAM1_BASE +		\
+					 ARM_DRAM1_SIZE -		\
+					(ARM_SCP_TZC_DRAM1_SIZE +	\
+					ARM_L1_GPT_SIZE +		\
+					ARM_EL3_RMM_SHARED_SIZE +	\
+					ARM_EL3_TZC_DRAM1_SIZE))
+
+#define ARM_EL3_RMM_SHARED_END		(ARM_EL3_RMM_SHARED_BASE +	\
+					 ARM_EL3_RMM_SHARED_SIZE - 1U)
 #endif /* ENABLE_RME */
 
 #define ARM_EL3_TZC_DRAM1_BASE		(ARM_SCP_TZC_DRAM1_BASE -	\
@@ -148,6 +166,7 @@
 #define ARM_AP_TZC_DRAM1_SIZE		(ARM_TZC_DRAM1_SIZE -		\
 					(ARM_SCP_TZC_DRAM1_SIZE +	\
 					ARM_EL3_TZC_DRAM1_SIZE +	\
+					ARM_EL3_RMM_SHARED_SIZE +	\
 					ARM_REALM_SIZE +		\
 					ARM_L1_GPT_SIZE))
 #define ARM_AP_TZC_DRAM1_END		(ARM_AP_TZC_DRAM1_BASE +	\
@@ -197,6 +216,7 @@
 #define ARM_NS_DRAM1_BASE		ARM_DRAM1_BASE
 #define ARM_NS_DRAM1_SIZE		(ARM_DRAM1_SIZE -		\
 					 ARM_TZC_DRAM1_SIZE)
+
 #define ARM_NS_DRAM1_END		(ARM_NS_DRAM1_BASE +		\
 					 ARM_NS_DRAM1_SIZE - 1U)
 #ifdef PLAT_ARM_DRAM1_BASE
@@ -284,17 +304,20 @@
 					ARM_EL3_TZC_DRAM1_SIZE,		\
 					MT_MEMORY | MT_RW | EL3_PAS)
 
-#if defined(SPD_spmd)
 #define ARM_MAP_TRUSTED_DRAM	MAP_REGION_FLAT(			\
 					PLAT_ARM_TRUSTED_DRAM_BASE,	\
 					PLAT_ARM_TRUSTED_DRAM_SIZE,	\
 					MT_MEMORY | MT_RW | MT_SECURE)
-#endif
 
 #if ENABLE_RME
+/*
+ * We add the EL3_RMM_SHARED size to RMM mapping to map the region as a block.
+ * Else we end up requiring more pagetables in BL2 for ROMLIB build.
+ */
 #define ARM_MAP_RMM_DRAM	MAP_REGION_FLAT(			\
 					PLAT_ARM_RMM_BASE,		\
-					PLAT_ARM_RMM_SIZE,		\
+					(PLAT_ARM_RMM_SIZE + 		\
+					ARM_EL3_RMM_SHARED_SIZE),	\
 					MT_MEMORY | MT_RW | MT_REALM)
 
 
@@ -302,6 +325,12 @@
 					ARM_L1_GPT_ADDR_BASE,		\
 					ARM_L1_GPT_SIZE,		\
 					MT_MEMORY | MT_RW | EL3_PAS)
+
+#define ARM_MAP_EL3_RMM_SHARED_MEM					\
+				MAP_REGION_FLAT(			\
+					ARM_EL3_RMM_SHARED_BASE,	\
+					ARM_EL3_RMM_SHARED_SIZE,	\
+					MT_MEMORY | MT_RW | MT_REALM)
 
 #endif /* ENABLE_RME */
 
@@ -381,7 +410,7 @@
  * The max number of regions like RO(code), coherent and data required by
  * different BL stages which need to be mapped in the MMU.
  */
-#define ARM_BL_REGIONS			6
+#define ARM_BL_REGIONS			7
 
 #define MAX_MMAP_REGIONS		(PLAT_ARM_MMAP_ENTRIES +	\
 					 ARM_BL_REGIONS)
@@ -522,9 +551,20 @@
  * BL2 specific defines.
  ******************************************************************************/
 #if BL2_AT_EL3
+#if ENABLE_PIE
+/*
+ * As the BL31 image size appears to be increased when built with the ENABLE_PIE
+ * option, set BL2 base address to have enough space for BL31 in Trusted SRAM.
+ */
+#define BL2_BASE			(ARM_TRUSTED_SRAM_BASE + \
+					(PLAT_ARM_TRUSTED_SRAM_SIZE >> 1) + \
+					0x3000)
+#else
 /* Put BL2 towards the middle of the Trusted SRAM */
 #define BL2_BASE			(ARM_TRUSTED_SRAM_BASE + \
-						(PLAT_ARM_TRUSTED_SRAM_SIZE >> 1) + 0x2000)
+					(PLAT_ARM_TRUSTED_SRAM_SIZE >> 1) + \
+					0x2000)
+#endif /* ENABLE_PIE */
 #define BL2_LIMIT			(ARM_BL_RAM_BASE + ARM_BL_RAM_SIZE)
 
 #else
@@ -586,6 +626,8 @@
 #if ENABLE_RME
 #define RMM_BASE			(ARM_REALM_BASE)
 #define RMM_LIMIT			(RMM_BASE + ARM_REALM_SIZE)
+#define RMM_SHARED_BASE			(ARM_EL3_RMM_SHARED_BASE)
+#define RMM_SHARED_SIZE			(ARM_EL3_RMM_SHARED_SIZE)
 #endif
 
 #if !defined(__aarch64__) || JUNO_AARCH32_EL3_RUNTIME
@@ -620,7 +662,7 @@
  * Trusted DRAM (if available) or the DRAM region secured by the TrustZone
  * controller.
  */
-# if SPM_MM
+# if SPM_MM || SPMC_AT_EL3
 #  define TSP_SEC_MEM_BASE		(ARM_AP_TZC_DRAM1_BASE + ULL(0x200000))
 #  define TSP_SEC_MEM_SIZE		(ARM_AP_TZC_DRAM1_SIZE - ULL(0x200000))
 #  define BL32_BASE			(ARM_AP_TZC_DRAM1_BASE + ULL(0x200000))
@@ -666,12 +708,13 @@
 
 /*
  * BL32 is mandatory in AArch32. In AArch64, undefine BL32_BASE if there is no
- * SPD and no SPM-MM, as they are the only ones that can be used as BL32.
+ * SPD and no SPM-MM and no SPMC-AT-EL3, as they are the only ones that can be
+ * used as BL32.
  */
 #if defined(__aarch64__) && !JUNO_AARCH32_EL3_RUNTIME
-# if defined(SPD_none) && !SPM_MM
+# if defined(SPD_none) && !SPM_MM && !SPMC_AT_EL3
 #  undef BL32_BASE
-# endif /* defined(SPD_none) && !SPM_MM */
+# endif /* defined(SPD_none) && !SPM_MM || !SPMC_AT_EL3 */
 #endif /* defined(__aarch64__) && !JUNO_AARCH32_EL3_RUNTIME */
 
 /*******************************************************************************

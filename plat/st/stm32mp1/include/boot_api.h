@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2021, STMicroelectronics - All Rights Reserved
+ * Copyright (c) 2017-2022, STMicroelectronics - All Rights Reserved
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -13,12 +13,22 @@
 /*
  * Possible value of boot context field 'auth_status'
  */
+#if STM32MP13
+ /* No authentication done */
+#define BOOT_API_CTX_AUTH_NO					0x7CFDD351U
+ /* Authentication done and failed */
+#define BOOT_API_CTX_AUTH_FAILED				0x51330884U
+ /* Authentication done and success */
+#define BOOT_API_CTX_AUTH_SUCCESS				0x67E8CAE1U
+#endif
+#if STM32MP15
 /* No authentication done */
 #define BOOT_API_CTX_AUTH_NO					0x0U
 /* Authentication done and failed */
 #define BOOT_API_CTX_AUTH_FAILED				0x1U
 /* Authentication done and succeeded */
 #define BOOT_API_CTX_AUTH_SUCCESS				0x2U
+#endif
 
 /*
  * Possible value of boot context field 'boot_interface_sel'
@@ -70,11 +80,17 @@
 #define BOOT_API_CTX_EMMC_ERROR_STATUS_HEADER_NOT_FOUND         0x5U
 #define BOOT_API_CTX_EMMC_ERROR_STATUS_HEADER_SIZE_ZERO         0x6U
 #define BOOT_API_CTX_EMMC_ERROR_STATUS_IMAGE_NOT_COMPLETE       0x7U
+#define BOOT_API_CTX_EMMC_ERROR_STATUS_ACK_ERROR                0x8U
 
 /* Image Header related definitions */
 
 /* Definition of header version */
+#if STM32MP13
+#define BOOT_API_HEADER_VERSION					0x00020000U
+#endif
+#if STM32MP15
 #define BOOT_API_HEADER_VERSION					0x00010000U
+#endif
 
 /*
  * Magic number used to detect header in memory
@@ -92,6 +108,49 @@
 /* Possible values of the field 'boot_api_image_header_t.ecc_algo_type' */
 #define BOOT_API_ECDSA_ALGO_TYPE_P256NIST			1
 #define BOOT_API_ECDSA_ALGO_TYPE_BRAINPOOL256			2
+
+/*
+ * Extension headers related definitions
+ */
+/* 'bootapi_image_header_t.extension_flag' used for authentication feature */
+#define BOOT_API_AUTHENTICATION_EXTENSION_BIT			BIT(0)
+/* 'bootapi_image_header_t.extension_flag' used for FSBL decryption feature */
+#define BOOT_API_FSBL_DECRYPTION_EXTENSION_BIT			BIT(1)
+/* 'bootapi_image_header_t.extension_flag' used for padding header feature */
+#define BOOT_API_PADDING_EXTENSION_BIT				BIT(31)
+/*
+ * mask of bits of field 'bootapi_image_header_t.extension_flag'
+ * used for extension headers
+ */
+#define BOOT_API_ALL_EXTENSIONS_MASK \
+	(BOOT_API_AUTHENTICATION_EXTENSION_BIT | \
+	 BOOT_API_FSBL_DECRYPTION_EXTENSION_BIT | \
+	 BOOT_API_PADDING_EXTENSION_BIT)
+/*
+ * Magic number of FSBL decryption extension header
+ * The value shall gives the four bytes 'S','T',0x00,0x01 in memory
+ */
+#define BOOT_API_FSBL_DECRYPTION_HEADER_MAGIC_NB		0x01005453U
+
+/*
+ * Magic number of PKH revocation extension header
+ * The value shall gives the four bytes 'S','T',0x00,0x02 in memory
+ */
+#define BOOT_API_AUTHENTICATION_HEADER_MAGIC_NB			0x02005453U
+
+/* Max number of ECDSA public key hash in table */
+#define BOOT_API_AUTHENTICATION_NB_PKH_MAX			8U
+
+/* ECDSA public key hash table size in bytes */
+#define BOOT_API_AUTHENTICATION_TABLE_SIZE_BYTES \
+	(BOOT_API_AUTHENTICATION_NB_PKH_MAX * \
+	 BOOT_API_SHA256_DIGEST_SIZE_IN_BYTES)
+
+/*
+ * Magic number of padding extension header
+ * The value shall gives the four bytes 'S','T',0xFF,0xFF in memory
+ */
+#define BOOT_API_PADDING_HEADER_MAGIC_NB			0xFFFF5453U
 
 /*
  * Cores secure magic numbers
@@ -157,29 +216,31 @@ typedef struct {
 	 */
 	uint16_t boot_interface_selected;
 	uint16_t boot_interface_instance;
+#if STM32MP13
+	uint32_t reserved1[12];
+#endif
+#if STM32MP15
 	uint32_t reserved1[13];
+#endif
 	uint32_t otp_afmux_values[3];
-	uint32_t reserved[5];
+	uint32_t reserved[3];
+#if STM32MP15
+	uint32_t reserved2[2];
+#endif
 	uint32_t auth_status;
 
+#if STM32MP15
 	/*
 	 * Pointers to bootROM External Secure Services
-	 * - ECDSA check key
 	 * - ECDSA verify signature
-	 * - ECDSA verify signature and go
 	 */
-	uint32_t (*bootrom_ecdsa_check_key)(uint8_t *pubkey_in,
-					    uint8_t *pubkey_out);
+	uint32_t reserved3;
 	uint32_t (*bootrom_ecdsa_verify_signature)(uint8_t *hash_in,
 						   uint8_t *pubkey_in,
 						   uint8_t *signature,
 						   uint32_t ecc_algo);
-	uint32_t (*bootrom_ecdsa_verify_and_go)(uint8_t *hash_in,
-						uint8_t *pub_key_in,
-						uint8_t *signature,
-						uint32_t ecc_algo,
-						uint32_t *entry_in);
-
+	uint32_t reserved4;
+#endif
 	/*
 	 * Information specific to an SD boot
 	 * Updated each time an SD boot is at least attempted,
@@ -227,10 +288,10 @@ typedef struct {
 	uint8_t image_signature[BOOT_API_ECDSA_SIGNATURE_LEN_IN_BYTES];
 	/*
 	 * Checksum of payload
-	 * 32-bit sum all all payload bytes considered as 8 bit unigned numbers,
-	 * discarding any overflow bits.
+	 * 32-bit sum all payload bytes considered as 8 bit unsigned
+	 * numbers, discarding any overflow bits.
 	 * Use to check UART/USB downloaded image integrity when signature
-	 * is not used (i.e bit 0 : 'No_sig_check' = 1 in option flags)
+	 * is not used
 	 */
 	uint32_t payload_checksum;
 	/* Image header version : should have value BOOT_API_HEADER_VERSION */
@@ -255,6 +316,27 @@ typedef struct {
 	 * counter value in OTP_CFG4 prior executing the downloaded image
 	 */
 	uint32_t image_version;
+
+#if STM32MP13
+	/*
+	 * Extension flags :
+	 *
+	 * Bit 0 : Authentication extension header
+	 *      value 0 : No signature check request
+	 * Bit 1 : Encryption extension header
+	 * Bit 2 : Padding extension header
+	 */
+	uint32_t extension_flags;
+	/* Length in bytes of all extension headers */
+	uint32_t extension_headers_length;
+	/* Add binary type information */
+	uint32_t binary_type;
+	/* Pad up to 128 byte total size */
+	uint8_t pad[16];
+	/* Followed by extension header */
+	uint8_t ext_header[];
+#endif
+#if STM32MP15
 	/*
 	 * Option flags:
 	 * Bit 0 : No signature check request : 'No_sig_check'
@@ -280,6 +362,48 @@ typedef struct {
 	uint8_t pad[83];
 	/* Add binary type information */
 	uint8_t binary_type;
+#endif
 } __packed boot_api_image_header_t;
+
+typedef uint8_t boot_api_sha256_t[BOOT_API_SHA256_DIGEST_SIZE_IN_BYTES];
+
+typedef struct {
+	/* Extension header type:
+	 * BOOT_API_FSBL_DECRYPTION_HEADER_MAGIC_NB or
+	 * BOOT_API_AUTHENTICATION_HEADER_MAGIC_NB
+	 * BOOT_API_PADDING_HEADER_MAGIC_NB
+	 */
+	uint32_t type;
+	/* Extension header len in byte */
+	uint32_t len;
+	/* parameters of this extension */
+	uint8_t  params[];
+} __packed boot_extension_header_t;
+
+typedef struct {
+	/* Idx of ECDSA public key to be used in table */
+	uint32_t pk_idx;
+	/* Number of ECDSA public key in table */
+	uint32_t nb_pk;
+	/*
+	 * Type of ECC algorithm to use  :
+	 * value 1 : for P-256 NIST algorithm
+	 * value 2 : for Brainpool 256 algorithm
+	 * See definitions 'BOOT_API_ECDSA_ALGO_TYPE_XXX' above.
+	 */
+	uint32_t ecc_algo_type;
+	/* ECDSA public key to be used to check signature. */
+	uint8_t ecc_pubk[BOOT_API_ECDSA_PUB_KEY_LEN_IN_BYTES];
+	/* table of Hash of Algo+ECDSA public key */
+	boot_api_sha256_t pk_hashes[];
+} __packed boot_ext_header_params_authentication_t;
+
+typedef struct {
+	/* Size of encryption key (128 or 256) */
+	uint32_t key_size;
+	uint32_t derivation_cont;
+	/* 128 msb bits of plain payload SHA256 */
+	uint32_t hash[4];
+} __packed boot_ext_header_params_encrypted_fsbl_t;
 
 #endif /* BOOT_API_H */

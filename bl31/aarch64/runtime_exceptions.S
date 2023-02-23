@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2021, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2013-2022, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -71,8 +71,9 @@
 	 * Save general purpose and ARMv8.3-PAuth registers (if enabled).
 	 * If Secure Cycle Counter is not disabled in MDCR_EL3 when
 	 * ARMv8.5-PMU is implemented, save PMCR_EL0 and disable Cycle Counter.
+	 * Also set the PSTATE to a known state.
 	 */
-	bl	save_gp_pmcr_pauth_regs
+	bl	prepare_el3_entry
 
 	bl	handle_lower_el_ea_esb
 
@@ -209,8 +210,9 @@ exp_from_EL3:
 	 * Save general purpose and ARMv8.3-PAuth registers (if enabled).
 	 * If Secure Cycle Counter is not disabled in MDCR_EL3 when
 	 * ARMv8.5-PMU is implemented, save PMCR_EL0 and disable Cycle Counter.
+	 * Also set the PSTATE to a known state.
 	 */
-	bl	save_gp_pmcr_pauth_regs
+	bl	prepare_el3_entry
 
 #if ENABLE_PAUTH
 	/* Load and program APIAKey firmware key */
@@ -462,8 +464,9 @@ smc_handler64:
 	 * Save general purpose and ARMv8.3-PAuth registers (if enabled).
 	 * If Secure Cycle Counter is not disabled in MDCR_EL3 when
 	 * ARMv8.5-PMU is implemented, save PMCR_EL0 and disable Cycle Counter.
+	 * Also set the PSTATE to a known state.
 	 */
-	bl	save_gp_pmcr_pauth_regs
+	bl	prepare_el3_entry
 
 #if ENABLE_PAUTH
 	/* Load and program APIAKey firmware key */
@@ -509,7 +512,7 @@ smc_handler64:
 
 	/*
 	 * Shift copied SCR_EL3.NSE bit by 5 to create space for
-	 * SCR_EL3.NS bit. Bit 5 of the flag correspondes to
+	 * SCR_EL3.NS bit. Bit 5 of the flag corresponds to
 	 * the SCR_EL3.NSE bit.
 	 */
 	lsl	x7, x7, #5
@@ -517,6 +520,16 @@ smc_handler64:
 
 	/* Copy SCR_EL3.NS bit to the flag to indicate caller's security */
 	bfi	x7, x18, #0, #1
+
+	/*
+	 * Per SMCCCv1.3 a caller can set the SVE hint bit in the SMC FID
+	 * passed through x0. Copy the SVE hint bit to flags and mask the
+	 * bit in smc_fid passed to the standard service dispatcher.
+	 * A service/dispatcher can retrieve the SVE hint bit state from
+	 * flags using the appropriate helper.
+	 */
+	bfi	x7, x0, #FUNCID_SVE_HINT_SHIFT, #FUNCID_SVE_HINT_MASK
+	bic	x0, x0, #(FUNCID_SVE_HINT_MASK << FUNCID_SVE_HINT_SHIFT)
 
 	mov	sp, x12
 

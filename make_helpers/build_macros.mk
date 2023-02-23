@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2015-2021, ARM Limited and Contributors. All rights reserved.
+# Copyright (c) 2015-2022, Arm Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -236,6 +236,20 @@ endif
 .PHONY: check_$(1)
 check_$(1):
 	$(check_$(1)_cmd)
+endef
+
+# SELECT_OPENSSL_API_VERSION selects the OpenSSL API version to be used to
+# build the host tools by checking the version of OpenSSL located under
+# the path defined by the OPENSSL_DIR variable. It receives no parameters.
+define SELECT_OPENSSL_API_VERSION
+    # Set default value for USING_OPENSSL3 macro to 0
+    $(eval USING_OPENSSL3 = 0)
+    # Obtain the OpenSSL version for the build located under OPENSSL_DIR
+    $(eval OPENSSL_INFO := $(shell LD_LIBRARY_PATH=${OPENSSL_DIR}:${OPENSSL_DIR}/lib ${OPENSSL_BIN_PATH}/openssl version))
+    $(eval OPENSSL_CURRENT_VER = $(word 2, ${OPENSSL_INFO}))
+    $(eval OPENSSL_CURRENT_VER_MAJOR = $(firstword $(subst ., ,$(OPENSSL_CURRENT_VER))))
+    # If OpenSSL version is 3.x, then set USING_OPENSSL3 flag to 1
+    $(if $(filter 3,$(OPENSSL_CURRENT_VER_MAJOR)), $(eval USING_OPENSSL3 = 1))
 endef
 
 ################################################################################
@@ -489,13 +503,18 @@ ifeq ($(USE_ROMLIB),1)
 $(ELF): romlib.bin
 endif
 
+# MODULE_OBJS can be assigned by vendors with different compiled
+# object file path, and prebuilt object file path.
+$(eval OBJS += $(MODULE_OBJS))
+
 $(ELF): $(OBJS) $(LINKERFILE) | $(1)_dirs libraries $(BL_LIBS)
 	$$(ECHO) "  LD      $$@"
 ifdef MAKE_BUILD_STRINGS
 	$(call MAKE_BUILD_STRINGS, $(BUILD_DIR)/build_message.o)
 else
 	@echo 'const char build_message[] = "Built : "$(BUILD_MESSAGE_TIMESTAMP); \
-	       const char version_string[] = "${VERSION_STRING}";' | \
+	       const char version_string[] = "${VERSION_STRING}"; \
+	       const char version[] = "${VERSION}";' | \
 		$$(CC) $$(TF_CFLAGS) $$(CFLAGS) -xc -c - -o $(BUILD_DIR)/build_message.o
 endif
 ifneq ($(findstring armlink,$(notdir $(LD))),)
@@ -507,7 +526,7 @@ ifneq ($(findstring armlink,$(notdir $(LD))),)
 		$(BUILD_DIR)/build_message.o $(OBJS)
 else ifneq ($(findstring gcc,$(notdir $(LD))),)
 	$$(Q)$$(LD) -o $$@ $$(TF_LDFLAGS) $$(LDFLAGS) -Wl,-Map=$(MAPFILE) \
-		-Wl,-T$(LINKERFILE) $(BUILD_DIR)/build_message.o \
+		-Wl,-dT $(LINKERFILE) $(EXTRA_LINKERFILE) $(BUILD_DIR)/build_message.o \
 		$(OBJS) $(LDPATHS) $(LIBWRAPPER) $(LDLIBS) $(BL_LIBS)
 else
 	$$(Q)$$(LD) -o $$@ $$(TF_LDFLAGS) $$(LDFLAGS) $(BL_LDFLAGS) -Map=$(MAPFILE) \

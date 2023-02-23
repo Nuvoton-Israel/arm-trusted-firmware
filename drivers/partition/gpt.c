@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2016-2022, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include <common/debug.h>
+#include <drivers/partition/efi.h>
 #include <drivers/partition/gpt.h>
 #include <lib/utils.h>
 
@@ -57,5 +58,8 @@ int parse_gpt_entry(gpt_entry_t *gpt_entry, partition_entry_t *entry)
 	entry->length = (uint64_t)(gpt_entry->last_lba -
 				   gpt_entry->first_lba + 1) *
 			PLAT_PARTITION_BLOCK_SIZE;
+	guidcpy(&entry->part_guid, &gpt_entry->unique_uuid);
+	guidcpy(&entry->type_guid, &gpt_entry->type_uuid);
+
 	return 0;
 }

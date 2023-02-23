@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2019-2021, Xilinx, Inc. All rights reserved.
+ * Copyright (c) 2019-2022, Xilinx, Inc. All rights reserved.
+ * Copyright (c) 2022, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -18,27 +19,52 @@
 #include "pm_client.h"
 #include "pm_ipi.h"
 #include <drivers/arm/gicv3.h>
+#include "../drivers/arm/gic/v3/gicv3_private.h"
+
+#define MODE				0x80000000U
 
 #define XSCUGIC_SGIR_EL1_INITID_SHIFT    24U
 #define INVALID_SGI    0xFFU
+#define PM_INIT_SUSPEND_CB	(30U)
+#define PM_NOTIFY_CB		(32U)
 DEFINE_RENAME_SYSREG_RW_FUNCS(icc_asgi1r_el1, S3_0_C12_C11_6)
 
 /* pm_up = true - UP, pm_up = false - DOWN */
 static bool pm_up;
-static unsigned int sgi = (unsigned int)INVALID_SGI;
+static uint32_t sgi = (uint32_t)INVALID_SGI;
+
+static void notify_os(void)
+{
+	int32_t cpu;
+	uint32_t reg;
+
+	cpu = plat_my_core_pos() + 1U;
+
+	reg = (cpu | (sgi << XSCUGIC_SGIR_EL1_INITID_SHIFT));
+	write_icc_asgi1r_el1(reg);
+}
 
 static uint64_t ipi_fiq_handler(uint32_t id, uint32_t flags, void *handle,
 				void *cookie)
 {
-	unsigned int cpu;
-	unsigned int reg;
+	uint32_t payload[4] = {0};
+
+	VERBOSE("Received IPI FIQ from firmware\n");
 
 	(void)plat_ic_acknowledge_interrupt();
-	cpu = plat_my_core_pos() + 1U;
 
-	if ((unsigned int)sgi != (unsigned int)INVALID_SGI) {
-		reg = (cpu | ((unsigned int)sgi << (unsigned int)XSCUGIC_SGIR_EL1_INITID_SHIFT));
-		write_icc_asgi1r_el1(reg);
+	pm_get_callbackdata(payload, ARRAY_SIZE(payload), 0, 0);
+	switch (payload[0]) {
+	case PM_INIT_SUSPEND_CB:
+	case PM_NOTIFY_CB:
+		if (sgi != INVALID_SGI) {
+			notify_os();
+		}
+		break;
+	default:
+		pm_ipi_irq_clear(primary_proc);
+		WARN("Invalid IPI payload\n");
+		break;
 	}
 
 	/* Clear FIQ */
@@ -51,6 +77,7 @@ static uint64_t ipi_fiq_handler(uint32_t id, uint32_t flags, void *handle,
  * pm_register_sgi() - PM register the IPI interrupt
  *
  * @sgi -  SGI number to be used for communication.
+ * @reset -  Reset to invalid SGI when reset=1.
  * @return	On success, the initialization function must return 0.
  *		Any other return value will cause the framework to ignore
  *		the service
@@ -58,9 +85,14 @@ static uint64_t ipi_fiq_handler(uint32_t id, uint32_t flags, void *handle,
  * Update the SGI number to be used.
  *
  */
-int pm_register_sgi(unsigned int sgi_num)
+int32_t pm_register_sgi(uint32_t sgi_num, uint32_t reset)
 {
-	if ((unsigned int)sgi != (unsigned int)INVALID_SGI) {
+	if (reset == 1U) {
+		sgi = INVALID_SGI;
+		return 0;
+	}
+
+	if (sgi != INVALID_SGI) {
 		return -EBUSY;
 	}
 
@@ -68,7 +100,7 @@ int pm_register_sgi(unsigned int sgi_num)
 		return -EINVAL;
 	}
 
-	sgi = (unsigned int)sgi_num;
+	sgi = (uint32_t)sgi_num;
 	return 0;
 }
 
@@ -85,18 +117,12 @@ int pm_register_sgi(unsigned int sgi_num)
  * Called from sip_svc_setup initialization function with the
  * rt_svc_init signature.
  */
-int pm_setup(void)
+int32_t pm_setup(void)
 {
-	int status, ret = 0;
+	int32_t ret = 0;
 
-	status = pm_ipi_init(primary_proc);
-
-	if (status < 0) {
-		INFO("BL31: PM Service Init Failed, Error Code %d!\n", status);
-		ret = status;
-	} else {
-		pm_up = true;
-	}
+	pm_ipi_init(primary_proc);
+	pm_up = true;
 
 	/*
 	 * Enable IPI IRQ
@@ -110,13 +136,203 @@ int pm_setup(void)
 	if (ret != 0) {
 		WARN("BL31: registering IPI interrupt failed\n");
 	}
+
+	gicd_write_irouter(gicv3_driver_data->gicd_base, PLAT_VERSAL_IPI_IRQ, MODE);
 	return ret;
+}
+
+/**
+ * eemi_for_compatibility() - EEMI calls handler for deprecated calls
+ *
+ * @return - If EEMI API found then, uintptr_t type address, else 0
+ *
+ * Some EEMI API's use case needs to be changed in Linux driver, so they
+ * can take advantage of common EEMI handler in TF-A. As of now the old
+ * implementation of these APIs are required to maintain backward compatibility
+ * until their use case in linux driver changes.
+ */
+static uintptr_t eemi_for_compatibility(uint32_t api_id, uint32_t *pm_arg,
+					void *handle, uint32_t security_flag)
+{
+	enum pm_ret_status ret;
+
+	switch (api_id) {
+
+	case PM_IOCTL:
+	{
+		uint32_t value;
+
+		ret = pm_api_ioctl(pm_arg[0], pm_arg[1], pm_arg[2],
+				   pm_arg[3], pm_arg[4],
+				   &value, security_flag);
+		if (ret == PM_RET_ERROR_NOTSUPPORTED)
+			return (uintptr_t)0;
+
+		SMC_RET1(handle, (uint64_t)ret | ((uint64_t)value) << 32U);
+	}
+
+	case PM_QUERY_DATA:
+	{
+		uint32_t data[PAYLOAD_ARG_CNT] = { 0 };
+
+		ret = pm_query_data(pm_arg[0], pm_arg[1], pm_arg[2],
+				    pm_arg[3], data, security_flag);
+
+		SMC_RET2(handle, (uint64_t)ret | ((uint64_t)data[0] << 32U),
+			 (uint64_t)data[1] | ((uint64_t)data[2] << 32U));
+	}
+
+	case PM_FEATURE_CHECK:
+	{
+		uint32_t result[PAYLOAD_ARG_CNT] = {0U};
+
+		ret = pm_feature_check(pm_arg[0], result, security_flag);
+		SMC_RET2(handle, (uint64_t)ret | ((uint64_t)result[0] << 32U),
+			 (uint64_t)result[1] | ((uint64_t)result[2] << 32U));
+	}
+
+	case PM_LOAD_PDI:
+	{
+		ret = pm_load_pdi(pm_arg[0], pm_arg[1], pm_arg[2],
+				  security_flag);
+		SMC_RET1(handle, (uint64_t)ret);
+	}
+
+	default:
+		return (uintptr_t)0;
+	}
+}
+
+/**
+ * eemi_psci_debugfs_handler() - EEMI API invoked from PSCI
+ *
+ * These EEMI APIs performs CPU specific power management tasks.
+ * These EEMI APIs are invoked either from PSCI or from debugfs in kernel.
+ * These calls require CPU specific processing before sending IPI request to
+ * Platform Management Controller. For example enable/disable CPU specific
+ * interrupts. This requires separate handler for these calls and may not be
+ * handled using common eemi handler
+ */
+static uintptr_t eemi_psci_debugfs_handler(uint32_t api_id, uint32_t *pm_arg,
+					   void *handle, uint32_t security_flag)
+{
+	enum pm_ret_status ret;
+
+	switch (api_id) {
+
+	case PM_SELF_SUSPEND:
+		ret = pm_self_suspend(pm_arg[0], pm_arg[1], pm_arg[2],
+				      pm_arg[3], security_flag);
+		SMC_RET1(handle, (u_register_t)ret);
+
+	case PM_FORCE_POWERDOWN:
+		ret = pm_force_powerdown(pm_arg[0], pm_arg[1], security_flag);
+		SMC_RET1(handle, (u_register_t)ret);
+
+	case PM_REQ_SUSPEND:
+		ret = pm_req_suspend(pm_arg[0], pm_arg[1], pm_arg[2],
+				     pm_arg[3], security_flag);
+		SMC_RET1(handle, (u_register_t)ret);
+
+	case PM_ABORT_SUSPEND:
+		ret = pm_abort_suspend(pm_arg[0], security_flag);
+		SMC_RET1(handle, (u_register_t)ret);
+
+	case PM_SYSTEM_SHUTDOWN:
+		ret = pm_system_shutdown(pm_arg[0], pm_arg[1], security_flag);
+		SMC_RET1(handle, (u_register_t)ret);
+
+	default:
+		return (uintptr_t)0;
+	}
+}
+
+/**
+ * TF_A_specific_handler() - SMC handler for TF-A specific functionality
+ *
+ * These EEMI calls performs functionality that does not require
+ * IPI transaction. The handler ends in TF-A and returns requested data to
+ * kernel from TF-A.
+ */
+static uintptr_t TF_A_specific_handler(uint32_t api_id, uint32_t *pm_arg,
+				       void *handle, uint32_t security_flag)
+{
+	switch (api_id) {
+
+	case TF_A_PM_REGISTER_SGI:
+	{
+		int32_t ret;
+
+		ret = pm_register_sgi(pm_arg[0], pm_arg[1]);
+		if (ret != 0) {
+			SMC_RET1(handle, (uint32_t)PM_RET_ERROR_ARGS);
+		}
+
+		SMC_RET1(handle, (uint32_t)PM_RET_SUCCESS);
+	}
+
+	case PM_GET_CALLBACK_DATA:
+	{
+		uint32_t result[4] = {0};
+
+		pm_get_callbackdata(result, ARRAY_SIZE(result), security_flag, 1U);
+		SMC_RET2(handle,
+			(uint64_t)result[0] | ((uint64_t)result[1] << 32U),
+			(uint64_t)result[2] | ((uint64_t)result[3] << 32U));
+	}
+
+	case PM_GET_TRUSTZONE_VERSION:
+		SMC_RET1(handle, (uint64_t)PM_RET_SUCCESS |
+			 ((uint64_t)TZ_VERSION << 32U));
+
+	default:
+		return (uintptr_t)0;
+	}
+}
+
+/**
+ * eemi_handler() - Prepare EEMI payload and perform IPI transaction
+ *
+ * EEMI - Embedded Energy Management Interface is Xilinx proprietary protocol
+ * to allow communication between power management controller and different
+ * processing clusters.
+ *
+ * This handler prepares EEMI protocol payload received from kernel and performs
+ * IPI transaction.
+ */
+static uintptr_t eemi_handler(uint32_t api_id, uint32_t *pm_arg,
+			      void *handle, uint32_t security_flag)
+{
+	enum pm_ret_status ret;
+	uint32_t buf[PAYLOAD_ARG_CNT] = {0};
+
+	ret = pm_handle_eemi_call(security_flag, api_id, pm_arg[0], pm_arg[1],
+				  pm_arg[2], pm_arg[3], pm_arg[4],
+				  (uint64_t *)buf);
+	/*
+	 * Two IOCTLs, to get clock name and pinctrl name of pm_query_data API
+	 * receives 5 words of respoonse from firmware. Currently linux driver can
+	 * receive only 4 words from TF-A. So, this needs to be handled separately
+	 * than other eemi calls.
+	 */
+	if (api_id == PM_QUERY_DATA) {
+		if ((pm_arg[0] == XPM_QID_CLOCK_GET_NAME ||
+		    pm_arg[0] == XPM_QID_PINCTRL_GET_FUNCTION_NAME) &&
+		    ret == PM_RET_SUCCESS) {
+			SMC_RET2(handle, (uint64_t)buf[0] | ((uint64_t)buf[1] << 32U),
+				(uint64_t)buf[2] | ((uint64_t)buf[3] << 32U));
+		}
+	}
+
+	SMC_RET2(handle, (uint64_t)ret | ((uint64_t)buf[0] << 32U),
+		 (uint64_t)buf[1] | ((uint64_t)buf[2] << 32U));
 }
 
 /**
  * pm_smc_handler() - SMC handler for PM-API calls coming from EL1/EL2.
  * @smc_fid - Function Identifier
- * @x1 - x4 - Arguments
+ * @x1 - x4 - SMC64 Arguments from kernel
+ *	      x3 (upper 32-bits) and x4 are Unused
  * @cookie  - Unused
  * @handler - Pointer to caller's context structure
  *
@@ -130,22 +346,17 @@ int pm_setup(void)
  * function with rt_svc_handle signature
  */
 uint64_t pm_smc_handler(uint32_t smc_fid, uint64_t x1, uint64_t x2, uint64_t x3,
-			uint64_t x4, void *cookie, void *handle, uint64_t flags)
+			uint64_t x4, const void *cookie, void *handle, uint64_t flags)
 {
-	enum pm_ret_status ret;
-
-	uint32_t pm_arg[4];
+	uintptr_t ret;
+	uint32_t pm_arg[PAYLOAD_ARG_CNT] = {0};
 	uint32_t security_flag = SECURE_FLAG;
+	uint32_t api_id;
 
 	/* Handle case where PM wasn't initialized properly */
 	if (pm_up == false) {
 		SMC_RET1(handle, SMC_UNK);
 	}
-
-	pm_arg[0] = (uint32_t)x1;
-	pm_arg[1] = (uint32_t)(x1 >> 32);
-	pm_arg[2] = (uint32_t)x2;
-	pm_arg[3] = (uint32_t)(x2 >> 32);
 
 	/*
 	 * Mark BIT24 payload (i.e 1st bit of pm_arg[3] ) as non-secure (1)
@@ -155,282 +366,30 @@ uint64_t pm_smc_handler(uint32_t smc_fid, uint64_t x1, uint64_t x2, uint64_t x3,
 		security_flag = NON_SECURE_FLAG;
 	}
 
-	switch (smc_fid & FUNCID_NUM_MASK) {
-	/* PM API Functions */
-	case PM_SELF_SUSPEND:
-		ret = pm_self_suspend(pm_arg[0], pm_arg[1], pm_arg[2],
-				      pm_arg[3], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
+	pm_arg[0] = (uint32_t)x1;
+	pm_arg[1] = (uint32_t)(x1 >> 32U);
+	pm_arg[2] = (uint32_t)x2;
+	pm_arg[3] = (uint32_t)(x2 >> 32U);
+	pm_arg[4] = (uint32_t)x3;
+	(void)(x4);
+	api_id = smc_fid & FUNCID_NUM_MASK;
 
-	case PM_FORCE_POWERDOWN:
-		ret = pm_force_powerdown(pm_arg[0], pm_arg[1], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_REQ_SUSPEND:
-		ret = pm_req_suspend(pm_arg[0], pm_arg[1], pm_arg[2],
-				     pm_arg[3], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_ABORT_SUSPEND:
-		ret = pm_abort_suspend(pm_arg[0], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_SYSTEM_SHUTDOWN:
-		ret = pm_system_shutdown(pm_arg[0], pm_arg[1], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_REQ_WAKEUP:
-		ret = pm_req_wakeup(pm_arg[0], pm_arg[1], pm_arg[2], pm_arg[3],
-				    security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_SET_WAKEUP_SOURCE:
-		ret = pm_set_wakeup_source(pm_arg[0], pm_arg[1], pm_arg[2],
-					   security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_REQUEST_DEVICE:
-		ret = pm_request_device(pm_arg[0], pm_arg[1], pm_arg[2],
-					pm_arg[3], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_RELEASE_DEVICE:
-		ret = pm_release_device(pm_arg[0], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_SET_REQUIREMENT:
-		ret = pm_set_requirement(pm_arg[0], pm_arg[1], pm_arg[2],
-					 pm_arg[3], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_GET_API_VERSION:
-	{
-		uint32_t api_version;
-
-		ret = pm_get_api_version(&api_version, security_flag);
-		SMC_RET1(handle, (u_register_t)PM_RET_SUCCESS |
-				 ((u_register_t)api_version << 32));
+	ret = eemi_for_compatibility(api_id, pm_arg, handle, security_flag);
+	if (ret != (uintptr_t)0) {
+		return ret;
 	}
 
-	case PM_GET_DEVICE_STATUS:
-	{
-		uint32_t buff[3];
-
-		ret = pm_get_device_status(pm_arg[0], buff, security_flag);
-		SMC_RET2(handle, (u_register_t)ret | ((u_register_t)buff[0] << 32),
-			 (u_register_t)buff[1] | ((u_register_t)buff[2] << 32));
+	ret = eemi_psci_debugfs_handler(api_id, pm_arg, handle, flags);
+	if (ret !=  (uintptr_t)0) {
+		return ret;
 	}
 
-	case PM_RESET_ASSERT:
-		ret = pm_reset_assert(pm_arg[0], pm_arg[1], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_RESET_GET_STATUS:
-	{
-		uint32_t reset_status;
-
-		ret = pm_reset_get_status(pm_arg[0], &reset_status,
-					  security_flag);
-		SMC_RET1(handle, (u_register_t)ret |
-			 ((u_register_t)reset_status << 32));
+	ret = TF_A_specific_handler(api_id, pm_arg, handle, security_flag);
+	if (ret !=  (uintptr_t)0) {
+		return ret;
 	}
 
-	case PM_INIT_FINALIZE:
-		ret = pm_init_finalize(security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
+	ret = eemi_handler(api_id, pm_arg, handle, security_flag);
 
-	case PM_GET_CALLBACK_DATA:
-	{
-		uint32_t result[4] = {0};
-
-		pm_get_callbackdata(result, ARRAY_SIZE(result), security_flag);
-		SMC_RET2(handle,
-			 (u_register_t)result[0] | ((u_register_t)result[1] << 32),
-			 (u_register_t)result[2] | ((u_register_t)result[3] << 32));
-	}
-
-	case PM_PINCTRL_REQUEST:
-		ret = pm_pinctrl_request(pm_arg[0], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_PINCTRL_RELEASE:
-		ret = pm_pinctrl_release(pm_arg[0], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_PINCTRL_GET_FUNCTION:
-	{
-		uint32_t value = 0;
-
-		ret = pm_pinctrl_get_function(pm_arg[0], &value, security_flag);
-		SMC_RET1(handle, (u_register_t)ret | ((u_register_t)value) << 32);
-	}
-
-	case PM_PINCTRL_SET_FUNCTION:
-		ret = pm_pinctrl_set_function(pm_arg[0], pm_arg[1],
-					      security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_PINCTRL_CONFIG_PARAM_GET:
-	{
-		uint32_t value;
-
-		ret = pm_pinctrl_get_pin_param(pm_arg[0], pm_arg[1], &value,
-					       security_flag);
-		SMC_RET1(handle, (u_register_t)ret | ((u_register_t)value) << 32);
-	}
-
-	case PM_PINCTRL_CONFIG_PARAM_SET:
-		ret = pm_pinctrl_set_pin_param(pm_arg[0], pm_arg[1], pm_arg[2],
-					       security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_IOCTL:
-	{
-		uint32_t value;
-
-		ret = pm_api_ioctl(pm_arg[0], pm_arg[1], pm_arg[2],
-				   pm_arg[3], &value, security_flag);
-		SMC_RET1(handle, (u_register_t)ret | ((u_register_t)value) << 32);
-	}
-
-	case PM_QUERY_DATA:
-	{
-		uint32_t data[8] = { 0 };
-
-		ret = pm_query_data(pm_arg[0], pm_arg[1], pm_arg[2],
-				      pm_arg[3], data, security_flag);
-
-		SMC_RET2(handle, (u_register_t)ret  | ((u_register_t)data[0] << 32),
-				 (u_register_t)data[1] | ((u_register_t)data[2] << 32));
-
-	}
-	case PM_CLOCK_ENABLE:
-		ret = pm_clock_enable(pm_arg[0], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_CLOCK_DISABLE:
-		ret = pm_clock_disable(pm_arg[0], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_CLOCK_GETSTATE:
-	{
-		uint32_t value;
-
-		ret = pm_clock_get_state(pm_arg[0], &value, security_flag);
-		SMC_RET1(handle, (u_register_t)ret | ((u_register_t)value) << 32);
-	}
-
-	case PM_CLOCK_SETDIVIDER:
-		ret = pm_clock_set_divider(pm_arg[0], pm_arg[1], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_CLOCK_GETDIVIDER:
-	{
-		uint32_t value;
-
-		ret = pm_clock_get_divider(pm_arg[0], &value, security_flag);
-		SMC_RET1(handle, (u_register_t)ret | ((u_register_t)value) << 32);
-	}
-
-	case PM_CLOCK_SETPARENT:
-		ret = pm_clock_set_parent(pm_arg[0], pm_arg[1], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_CLOCK_GETPARENT:
-	{
-		uint32_t value;
-
-		ret = pm_clock_get_parent(pm_arg[0], &value, security_flag);
-		SMC_RET1(handle, (u_register_t)ret | ((u_register_t)value) << 32);
-	}
-
-	case PM_CLOCK_GETRATE:
-	{
-		uint32_t rate[2] = { 0 };
-
-		ret = pm_clock_get_rate(pm_arg[0], rate, security_flag);
-		SMC_RET2(handle, (u_register_t)ret | ((u_register_t)rate[0] << 32),
-			 (u_register_t)rate[1] | ((u_register_t)0U << 32));
-	}
-
-	case PM_PLL_SET_PARAMETER:
-		ret = pm_pll_set_param(pm_arg[0], pm_arg[1], pm_arg[2],
-				       security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_PLL_GET_PARAMETER:
-	{
-		uint32_t value;
-
-		ret = pm_pll_get_param(pm_arg[0], pm_arg[1], &value,
-				       security_flag);
-		SMC_RET1(handle, (u_register_t)ret | ((u_register_t)value << 32));
-	}
-
-	case PM_PLL_SET_MODE:
-		ret = pm_pll_set_mode(pm_arg[0], pm_arg[1], security_flag);
-		SMC_RET1(handle, (uint64_t)ret);
-
-	case PM_PLL_GET_MODE:
-	{
-		uint32_t mode;
-
-		ret = pm_pll_get_mode(pm_arg[0], &mode, security_flag);
-		SMC_RET1(handle, (u_register_t)ret | ((u_register_t)mode << 32));
-	}
-
-	case PM_GET_TRUSTZONE_VERSION:
-		SMC_RET1(handle, (uint64_t)PM_RET_SUCCESS |
-			 ((uint64_t)VERSAL_TZ_VERSION << 32));
-
-	case PM_GET_CHIPID:
-	{
-		uint32_t result[2];
-
-		ret = pm_get_chipid(result, security_flag);
-		SMC_RET2(handle, (u_register_t)ret | ((u_register_t)result[0] << 32),
-			 (u_register_t)result[1] | ((u_register_t)0U << 32));
-	}
-
-	case PM_FEATURE_CHECK:
-	{
-		uint32_t version;
-
-		ret = pm_feature_check(pm_arg[0], &version, security_flag);
-		SMC_RET1(handle, (u_register_t)ret | ((u_register_t)version << 32));
-	}
-
-	case PM_LOAD_PDI:
-	{
-		ret = pm_load_pdi(pm_arg[0], pm_arg[1], pm_arg[2],
-				  security_flag);
-		SMC_RET1(handle, (u_register_t)ret);
-	}
-
-	case PM_GET_OP_CHARACTERISTIC:
-	{
-		uint32_t result;
-
-		ret = pm_get_op_characteristic(pm_arg[0], pm_arg[1], &result,
-					       security_flag);
-		SMC_RET1(handle, (u_register_t)ret | ((u_register_t)result << 32));
-	}
-
-	case PM_SET_MAX_LATENCY:
-	{
-		ret = pm_set_max_latency(pm_arg[0], pm_arg[1], security_flag);
-		SMC_RET1(handle, (u_register_t)ret);
-	}
-
-	case PM_REGISTER_NOTIFIER:
-	{
-		ret = pm_register_notifier(pm_arg[0], pm_arg[1], pm_arg[2],
-					   pm_arg[3], security_flag);
-		SMC_RET1(handle, (u_register_t)ret);
-	}
-
-	default:
-		WARN("Unimplemented PM Service Call: 0x%x\n", smc_fid);
-		SMC_RET1(handle, SMC_UNK);
-	}
+	return ret;
 }

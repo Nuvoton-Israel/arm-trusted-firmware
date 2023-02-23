@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2013-2022, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -124,7 +124,7 @@ static void psci_suspend_to_pwrdown_start(unsigned int end_pwrlvl,
 	 * TODO : Introduce a mechanism to query the cache level to flush
 	 * and the cpu-ops power down to perform from the platform.
 	 */
-	psci_do_pwrdown_sequence(max_off_lvl);
+	psci_pwrdown_cpu(max_off_lvl);
 
 #if ENABLE_RUNTIME_INSTRUMENTATION
 	PMF_CAPTURE_TIMESTAMP(rt_instr_svc,
@@ -331,5 +331,5 @@ void psci_cpu_suspend_finish(unsigned int cpu_idx, const psci_power_state_t *sta
 	 * information that we had stashed away during the suspend
 	 * call to set this cpu on its way.
 	 */
-	cm_prepare_el3_exit(NON_SECURE);
+	cm_prepare_el3_exit_ns();
 }

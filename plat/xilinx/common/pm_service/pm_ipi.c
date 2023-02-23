@@ -1,24 +1,25 @@
 /*
  * Copyright (c) 2013-2020, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2019-2022, Xilinx, Inc. All rights reserved.
+ * Copyright (c) 2022, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
 
 #include <arch_helpers.h>
-
 #include <lib/bakery_lock.h>
 #include <lib/mmio.h>
-
 #include <ipi.h>
 #include <plat_ipi.h>
 #include <plat_private.h>
 #include <plat/common/platform.h>
 
+#include "pm_defs.h"
 #include "pm_ipi.h"
 
-
-#define ERROR_CODE_MASK		0xFFFFU
+#define ERROR_CODE_MASK		(0xFFFFU)
+#define PM_OFFSET		(0U)
 
 DEFINE_BAKERY_LOCK(pm_secure_lock);
 
@@ -33,12 +34,10 @@ DEFINE_BAKERY_LOCK(pm_secure_lock);
  *
  * Called from pm_setup initialization function
  */
-int pm_ipi_init(const struct pm_proc *proc)
+void pm_ipi_init(const struct pm_proc *proc)
 {
 	bakery_lock_init(&pm_secure_lock);
 	ipi_mb_open(proc->ipi->local_ipi_id, proc->ipi->remote_ipi_id);
-
-	return 0;
 }
 
 /**
@@ -55,7 +54,7 @@ static enum pm_ret_status pm_ipi_send_common(const struct pm_proc *proc,
 					     uint32_t payload[PAYLOAD_ARG_CNT],
 					     uint32_t is_blocking)
 {
-	unsigned int offset = 0;
+	uint32_t offset = PM_OFFSET;
 	uintptr_t buffer_base = proc->ipi->buffer_base +
 					IPI_BUFFER_TARGET_REMOTE_OFFSET +
 					IPI_BUFFER_REQ_OFFSET;
@@ -134,12 +133,12 @@ enum pm_ret_status pm_ipi_send(const struct pm_proc *proc,
  * @return	Returns status, either success or error+reason
  */
 static enum pm_ret_status pm_ipi_buff_read(const struct pm_proc *proc,
-					   unsigned int *value, size_t count)
+					   uint32_t *value, size_t count)
 {
 	size_t i;
 #if IPI_CRC_CHECK
 	size_t j;
-	unsigned int response_payload[PAYLOAD_ARG_CNT];
+	uint32_t response_payload[PAYLOAD_ARG_CNT];
 #endif
 	uintptr_t buffer_base = proc->ipi->buffer_base +
 				IPI_BUFFER_TARGET_REMOTE_OFFSET +
@@ -157,14 +156,16 @@ static enum pm_ret_status pm_ipi_buff_read(const struct pm_proc *proc,
 		value++;
 	}
 #if IPI_CRC_CHECK
-	for (j = 0; j < PAYLOAD_ARG_CNT; j++)
+	for (j = 0; j < PAYLOAD_ARG_CNT; j++) {
 		response_payload[j] = mmio_read_32(buffer_base +
 						(j * PAYLOAD_ARG_SIZE));
+	}
 
 	if (response_payload[PAYLOAD_CRC_POS] !=
-			calculate_crc(response_payload, IPI_W0_TO_W6_SIZE))
+			calculate_crc(response_payload, IPI_W0_TO_W6_SIZE)) {
 		NOTICE("ERROR in CRC response payload value:0x%x\n",
 					response_payload[PAYLOAD_CRC_POS]);
+	}
 #endif
 
 	return mmio_read_32(buffer_base);
@@ -178,33 +179,36 @@ static enum pm_ret_status pm_ipi_buff_read(const struct pm_proc *proc,
  *
  * @return	Returns status, either success or error+reason
  */
-void pm_ipi_buff_read_callb(unsigned int *value, size_t count)
+void pm_ipi_buff_read_callb(uint32_t *value, size_t count)
 {
 	size_t i;
 #if IPI_CRC_CHECK
 	size_t j;
-	unsigned int response_payload[PAYLOAD_ARG_CNT];
+	unsigned int response_payload[PAYLOAD_ARG_CNT] = {0};
 #endif
 	uintptr_t buffer_base = IPI_BUFFER_REMOTE_BASE +
 				IPI_BUFFER_TARGET_LOCAL_OFFSET +
 				IPI_BUFFER_REQ_OFFSET;
 
-	if (count > IPI_BUFFER_MAX_WORDS)
+	if (count > IPI_BUFFER_MAX_WORDS) {
 		count = IPI_BUFFER_MAX_WORDS;
+	}
 
 	for (i = 0; i <= count; i++) {
 		*value = mmio_read_32(buffer_base + (i * PAYLOAD_ARG_SIZE));
 		value++;
 	}
 #if IPI_CRC_CHECK
-	for (j = 0; j < PAYLOAD_ARG_CNT; j++)
+	for (j = 0; j < PAYLOAD_ARG_CNT; j++) {
 		response_payload[j] = mmio_read_32(buffer_base +
 						(j * PAYLOAD_ARG_SIZE));
+	}
 
 	if (response_payload[PAYLOAD_CRC_POS] !=
-			calculate_crc(response_payload, IPI_W0_TO_W6_SIZE))
+			calculate_crc(response_payload, IPI_W0_TO_W6_SIZE)) {
 		NOTICE("ERROR in CRC response payload value:0x%x\n",
 					response_payload[PAYLOAD_CRC_POS]);
+	}
 #endif
 }
 
@@ -222,15 +226,16 @@ void pm_ipi_buff_read_callb(unsigned int *value, size_t count)
  */
 enum pm_ret_status pm_ipi_send_sync(const struct pm_proc *proc,
 				    uint32_t payload[PAYLOAD_ARG_CNT],
-				    unsigned int *value, size_t count)
+				    uint32_t *value, size_t count)
 {
 	enum pm_ret_status ret;
 
 	bakery_lock_get(&pm_secure_lock);
 
 	ret = pm_ipi_send_common(proc, payload, IPI_BLOCKING);
-	if (ret != PM_RET_SUCCESS)
+	if (ret != PM_RET_SUCCESS) {
 		goto unlock;
+	}
 
 	ret = ERROR_CODE_MASK & (pm_ipi_buff_read(proc, value, count));
 
@@ -252,18 +257,19 @@ void pm_ipi_irq_clear(const struct pm_proc *proc)
 
 uint32_t pm_ipi_irq_status(const struct pm_proc *proc)
 {
-	int ret;
+	int32_t ret;
 
 	ret = ipi_mb_enquire_status(proc->ipi->local_ipi_id,
 				    proc->ipi->remote_ipi_id);
-	if (ret & IPI_MB_STATUS_RECV_PENDING)
+	if (ret & IPI_MB_STATUS_RECV_PENDING) {
 		return 1;
-	else
+	} else {
 		return 0;
+	}
 }
 
 #if IPI_CRC_CHECK
-uint32_t calculate_crc(uint32_t *payload, uint32_t bufsize)
+uint32_t calculate_crc(uint32_t payload[PAYLOAD_ARG_CNT], uint32_t bufsize)
 {
 	uint32_t crcinit = CRC_INIT_VALUE;
 	uint32_t order   = CRC_ORDER;

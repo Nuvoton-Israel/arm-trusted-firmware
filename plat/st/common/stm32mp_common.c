@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2021, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2015-2022, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -9,6 +9,7 @@
 
 #include <arch_helpers.h>
 #include <common/debug.h>
+#include <drivers/clk.h>
 #include <drivers/delay_timer.h>
 #include <drivers/st/stm32_console.h>
 #include <drivers/st/stm32mp_clkfunc.h>
@@ -84,43 +85,6 @@ bool stm32mp_lock_available(void)
 	return (read_sctlr() & c_m_bits) == c_m_bits;
 }
 
-#if STM32MP_USE_STM32IMAGE
-int stm32mp_check_header(boot_api_image_header_t *header, uintptr_t buffer)
-{
-	uint32_t i;
-	uint32_t img_checksum = 0U;
-
-	/*
-	 * Check header/payload validity:
-	 *	- Header magic
-	 *	- Header version
-	 *	- Payload checksum
-	 */
-	if (header->magic != BOOT_API_IMAGE_HEADER_MAGIC_NB) {
-		ERROR("Header magic\n");
-		return -EINVAL;
-	}
-
-	if ((header->header_version & HEADER_VERSION_MAJOR_MASK) !=
-	    (BOOT_API_HEADER_VERSION & HEADER_VERSION_MAJOR_MASK)) {
-		ERROR("Header version\n");
-		return -EINVAL;
-	}
-
-	for (i = 0U; i < header->image_length; i++) {
-		img_checksum += *(uint8_t *)(buffer + i);
-	}
-
-	if (header->payload_checksum != img_checksum) {
-		ERROR("Checksum: 0x%x (awaited: 0x%x)\n", img_checksum,
-		      header->payload_checksum);
-		return -EINVAL;
-	}
-
-	return 0;
-}
-#endif /* STM32MP_USE_STM32IMAGE */
-
 int stm32mp_map_ddr_non_cacheable(void)
 {
 	return  mmap_add_dynamic_region(STM32MP_DDR_BASE, STM32MP_DDR_BASE,
@@ -132,6 +96,55 @@ int stm32mp_unmap_ddr(void)
 {
 	return  mmap_remove_dynamic_region(STM32MP_DDR_BASE,
 					   STM32MP_DDR_MAX_SIZE);
+}
+
+int stm32_get_otp_index(const char *otp_name, uint32_t *otp_idx,
+			uint32_t *otp_len)
+{
+	assert(otp_name != NULL);
+	assert(otp_idx != NULL);
+
+	return dt_find_otp_name(otp_name, otp_idx, otp_len);
+}
+
+int stm32_get_otp_value(const char *otp_name, uint32_t *otp_val)
+{
+	uint32_t otp_idx;
+
+	assert(otp_name != NULL);
+	assert(otp_val != NULL);
+
+	if (stm32_get_otp_index(otp_name, &otp_idx, NULL) != 0) {
+		return -1;
+	}
+
+	if (stm32_get_otp_value_from_idx(otp_idx, otp_val) != 0) {
+		ERROR("BSEC: %s Read Error\n", otp_name);
+		return -1;
+	}
+
+	return 0;
+}
+
+int stm32_get_otp_value_from_idx(const uint32_t otp_idx, uint32_t *otp_val)
+{
+	uint32_t ret = BSEC_NOT_SUPPORTED;
+
+	assert(otp_val != NULL);
+
+#if defined(IMAGE_BL2)
+	ret = bsec_shadow_read_otp(otp_val, otp_idx);
+#elif defined(IMAGE_BL32)
+	ret = bsec_read_otp(otp_val, otp_idx);
+#else
+#error "Not supported"
+#endif
+	if (ret != BSEC_OK) {
+		ERROR("BSEC: idx=%u Read Error\n", otp_idx);
+		return -1;
+	}
+
+	return 0;
 }
 
 #if  defined(IMAGE_BL2)
@@ -155,11 +168,28 @@ static void reset_uart(uint32_t reset)
 }
 #endif
 
+static void set_console(uintptr_t base, uint32_t clk_rate)
+{
+	unsigned int console_flags;
+
+	if (console_stm32_register(base, clk_rate,
+				   (uint32_t)STM32MP_UART_BAUDRATE, &console) == 0) {
+		panic();
+	}
+
+	console_flags = CONSOLE_FLAG_BOOT | CONSOLE_FLAG_CRASH |
+			CONSOLE_FLAG_TRANSLATE_CRLF;
+#if !defined(IMAGE_BL2) && defined(DEBUG)
+	console_flags |= CONSOLE_FLAG_RUNTIME;
+#endif
+
+	console_set_scope(&console, console_flags);
+}
+
 int stm32mp_uart_console_setup(void)
 {
 	struct dt_node_info dt_uart_info;
-	unsigned int console_flags;
-	uint32_t clk_rate;
+	uint32_t clk_rate = 0U;
 	int result;
 	uint32_t boot_itf __unused;
 	uint32_t boot_instance __unused;
@@ -167,11 +197,16 @@ int stm32mp_uart_console_setup(void)
 	result = dt_get_stdout_uart_info(&dt_uart_info);
 
 	if ((result <= 0) ||
-	    (dt_uart_info.status == DT_DISABLED) ||
-	    (dt_uart_info.clock < 0) ||
+	    (dt_uart_info.status == DT_DISABLED)) {
+		return -ENODEV;
+	}
+
+#if defined(IMAGE_BL2)
+	if ((dt_uart_info.clock < 0) ||
 	    (dt_uart_info.reset < 0)) {
 		return -ENODEV;
 	}
+#endif
 
 #if STM32MP_UART_PROGRAMMER || !defined(IMAGE_BL2)
 	stm32_get_boot_interface(&boot_itf, &boot_instance);
@@ -186,30 +221,29 @@ int stm32mp_uart_console_setup(void)
 	if (dt_set_stdout_pinctrl() != 0) {
 		return -ENODEV;
 	}
-#endif
 
-	stm32mp_clk_enable((unsigned long)dt_uart_info.clock);
+	clk_enable((unsigned long)dt_uart_info.clock);
 
-#if defined(IMAGE_BL2)
 	reset_uart((uint32_t)dt_uart_info.reset);
+
+	clk_rate = clk_get_rate((unsigned long)dt_uart_info.clock);
 #endif
 
-	clk_rate = stm32mp_clk_get_rate((unsigned long)dt_uart_info.clock);
-
-	if (console_stm32_register(dt_uart_info.base, clk_rate,
-				   STM32MP_UART_BAUDRATE, &console) == 0) {
-		panic();
-	}
-
-	console_flags = CONSOLE_FLAG_BOOT | CONSOLE_FLAG_CRASH |
-			CONSOLE_FLAG_TRANSLATE_CRLF;
-#if !defined(IMAGE_BL2) && defined(DEBUG)
-	console_flags |= CONSOLE_FLAG_RUNTIME;
-#endif
-	console_set_scope(&console, console_flags);
+	set_console(dt_uart_info.base, clk_rate);
 
 	return 0;
 }
+
+#if STM32MP_EARLY_CONSOLE
+void stm32mp_setup_early_console(void)
+{
+#if defined(IMAGE_BL2) || STM32MP_RECONFIGURE_CONSOLE
+	plat_crash_console_init();
+#endif
+	set_console(STM32MP_DEBUG_USART_BASE, STM32MP_DEBUG_USART_CLK_FRQ);
+	NOTICE("Early console setup\n");
+}
+#endif /* STM32MP_EARLY_CONSOLE */
 
 /*****************************************************************************
  * plat_is_smccc_feature_available() - This function checks whether SMCCC

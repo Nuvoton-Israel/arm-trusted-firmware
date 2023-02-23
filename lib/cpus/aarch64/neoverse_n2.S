@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, Arm Limited. All rights reserved.
+ * Copyright (c) 2020-2022, Arm Limited. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -8,6 +8,7 @@
 #include <asm_macros.S>
 #include <cpu_macros.S>
 #include <neoverse_n2.h>
+#include "wa_cve_2022_23960_bhb_vector.S"
 
 /* Hardware handled coherency */
 #if HW_ASSISTED_COHERENCY == 0
@@ -18,6 +19,10 @@
 #if CTX_INCLUDE_AARCH32_REGS == 1
 #error "Neoverse-N2 supports only AArch64. Compile with CTX_INCLUDE_AARCH32_REGS=0"
 #endif
+
+#if WORKAROUND_CVE_2022_23960
+	wa_cve_2022_23960_bhb_vector_table NEOVERSE_N2_BHB_LOOP_COUNT, neoverse_n2
+#endif /* WORKAROUND_CVE_2022_23960 */
 
 /* --------------------------------------------------
  * Errata Workaround for Neoverse N2 Erratum 2002655.
@@ -333,6 +338,129 @@ func check_errata_2280757
 	b	cpu_rev_var_ls
 endfunc check_errata_2280757
 
+/* --------------------------------------------------
+ * Errata Workaround for Neoverse N2 Erratum 2326639.
+ * This applies to revision r0p0 of Neoverse N2,
+ * fixed in r0p1.
+ * Inputs:
+ * x0: variant[4:7] and revision[0:3] of current cpu.
+ * Shall clobber: x0-x1, x17
+ * --------------------------------------------------
+ */
+func errata_n2_2326639_wa
+	/* Check revision. */
+	mov	x17, x30
+	bl	check_errata_2326639
+	cbz	x0, 1f
+
+	/* Set bit 36 in ACTLR2_EL1 */
+	mrs	x1, NEOVERSE_N2_CPUACTLR2_EL1
+	orr	x1, x1, #NEOVERSE_N2_CPUACTLR2_EL1_BIT_36
+	msr	NEOVERSE_N2_CPUACTLR2_EL1, x1
+1:
+	ret	x17
+endfunc errata_n2_2326639_wa
+
+func check_errata_2326639
+	/* Applies to r0p0, fixed in r0p1 */
+	mov	x1, #0x00
+	b	cpu_rev_var_ls
+endfunc check_errata_2326639
+
+/* --------------------------------------------------
+ * Errata Workaround for Neoverse N2 Erratum 2376738.
+ * This applies to revision r0p0 of Neoverse N2,
+ * fixed in r0p1.
+ * Inputs:
+ * x0: variant[4:7] and revision[0:3] of current CPU.
+ * Shall clobber: x0-x1, x17
+ * --------------------------------------------------
+ */
+func errata_n2_2376738_wa
+	mov	x17, x30
+	bl	check_errata_2376738
+	cbz	x0, 1f
+
+	/* Set CPUACTLR2_EL1[0] to 1 to force PLDW/PFRM
+	 * ST to behave like PLD/PFRM LD and not cause
+	 * invalidations to other PE caches.
+	 */
+	mrs	x1, NEOVERSE_N2_CPUACTLR2_EL1
+	orr	x1, x1,	NEOVERSE_N2_CPUACTLR2_EL1_BIT_0
+	msr	NEOVERSE_N2_CPUACTLR2_EL1, x1
+1:
+	ret x17
+endfunc errata_n2_2376738_wa
+
+func check_errata_2376738
+	/* Applies to r0p0, fixed in r0p1 */
+	mov	x1, 0x00
+	b	cpu_rev_var_ls
+endfunc check_errata_2376738
+
+/* --------------------------------------------------
+ * Errata Workaround for Neoverse N2 Erratum 2388450.
+ * This applies to revision r0p0 of Neoverse N2,
+ * fixed in r0p1.
+ * Inputs:
+ * x0: variant[4:7] and revision[0:3] of current cpu.
+ * Shall clobber: x0-x1, x17
+ * --------------------------------------------------
+ */
+func errata_n2_2388450_wa
+	/* Check revision. */
+	mov	x17, x30
+	bl	check_errata_2388450
+	cbz	x0, 1f
+
+	/*Set bit 40 in ACTLR2_EL1 */
+	mrs	x1, NEOVERSE_N2_CPUACTLR2_EL1
+	orr	x1, x1, #NEOVERSE_N2_CPUACTLR2_EL1_BIT_40
+	msr	NEOVERSE_N2_CPUACTLR2_EL1, x1
+	isb
+1:
+	ret	x17
+endfunc errata_n2_2388450_wa
+
+func check_errata_2388450
+	/* Applies to r0p0, fixed in r0p1 */
+	mov	x1, #0x00
+	b	cpu_rev_var_ls
+endfunc check_errata_2388450
+
+/* -------------------------------------------------------
+ * Errata Workaround for Neoverse N2 Erratum 2743089.
+ * This applies to revisions <= r0p2 and is fixed in r0p3.
+ * x0: variant[4:7] and revision[0:3] of current cpu.
+ * Shall clobber: x0-x17
+ * -------------------------------------------------------
+ */
+func errata_n2_2743089_wa
+	mov	x17, x30
+	bl	check_errata_2743089
+	cbz	x0, 1f
+
+	/* dsb before isb of power down sequence */
+	dsb	sy
+1:
+	ret	x17
+endfunc errata_n2_2743089_wa
+
+func check_errata_2743089
+	/* Applies to all revisions <= r0p2 */
+	mov	x1, #0x02
+	b	cpu_rev_var_ls
+endfunc check_errata_2743089
+
+func check_errata_cve_2022_23960
+#if WORKAROUND_CVE_2022_23960
+	mov	x0, #ERRATA_APPLIES
+#else
+	mov	x0, #ERRATA_MISSING
+#endif
+	ret
+endfunc check_errata_cve_2022_23960
+
 	/* -------------------------------------------
 	 * The CPU Ops reset function for Neoverse N2.
 	 * -------------------------------------------
@@ -352,6 +480,14 @@ func neoverse_n2_reset_func
 	mrs	x0, NEOVERSE_N2_CPUACTLR2_EL1
 	orr	x0, x0, #NEOVERSE_N2_CPUACTLR2_EL1_BIT_2
 	msr	NEOVERSE_N2_CPUACTLR2_EL1, x0
+
+	/* Get the CPU revision and stash it in x18. */
+	bl	cpu_get_rev_var
+	mov	x18, x0
+
+#if ERRATA_DSU_2313941
+	bl	errata_dsu_2313941_wa
+#endif
 
 #if ERRATA_N2_2067956
 	mov	x0, x18
@@ -399,6 +535,16 @@ func neoverse_n2_reset_func
 	bl	errata_n2_2280757_wa
 #endif
 
+#if ERRATA_N2_2376738
+	mov	x0, x18
+	bl	errata_n2_2376738_wa
+#endif
+
+#if ERRATA_N2_2388450
+	mov	x0, x18
+	bl	errata_n2_2388450_wa
+#endif
+
 #if ENABLE_AMU
 	/* Make sure accesses from EL0/EL1 and EL2 are not trapped to EL3 */
 	mrs	x0, cptr_el3
@@ -420,19 +566,32 @@ func neoverse_n2_reset_func
 	msr	NEOVERSE_N2_CPUECTLR_EL1, x0
 #endif
 
-	bl	cpu_get_rev_var
-	mov	x18, x0
-
 #if ERRATA_N2_2002655
 	mov	x0, x18
 	bl	errata_n2_2002655_wa
 #endif
+
+#if IMAGE_BL31 && WORKAROUND_CVE_2022_23960
+	/*
+	 * The Neoverse-N2 generic vectors are overridden to apply errata
+         * mitigation on exception entry from lower ELs.
+	 */
+	adr	x0, wa_cve_vbar_neoverse_n2
+	msr	vbar_el3, x0
+#endif /* IMAGE_BL31 && WORKAROUND_CVE_2022_23960 */
 
 	isb
 	ret	x19
 endfunc neoverse_n2_reset_func
 
 func neoverse_n2_core_pwr_dwn
+#if ERRATA_N2_2326639
+	mov	x15, x30
+	bl	cpu_get_rev_var
+	bl	errata_n2_2326639_wa
+	mov	x30, x15
+#endif /* ERRATA_N2_2326639 */
+
 	/* ---------------------------------------------------
 	 * Enable CPU power down bit in power control register
 	 * No need to do cache maintenance here.
@@ -441,6 +600,12 @@ func neoverse_n2_core_pwr_dwn
 	mrs	x0, NEOVERSE_N2_CPUPWRCTLR_EL1
 	orr	x0, x0, #NEOVERSE_N2_CORE_PWRDN_EN_BIT
 	msr	NEOVERSE_N2_CPUPWRCTLR_EL1, x0
+#if ERRATA_N2_2743089
+	mov	x15, x30
+	bl	cpu_get_rev_var
+	bl	errata_n2_2743089_wa
+	mov	x30, x15
+#endif /* ERRATA_N2_2743089 */
 	isb
 	ret
 endfunc neoverse_n2_core_pwr_dwn
@@ -469,6 +634,12 @@ func neoverse_n2_errata_report
 	report_errata ERRATA_N2_2138958, neoverse_n2, 2138958
 	report_errata ERRATA_N2_2242400, neoverse_n2, 2242400
 	report_errata ERRATA_N2_2280757, neoverse_n2, 2280757
+	report_errata ERRATA_N2_2326639, neoverse_n2, 2326639
+	report_errata ERRATA_N2_2376738, neoverse_n2, 2376738
+	report_errata ERRATA_N2_2388450, neoverse_n2, 2388450
+	report_errata ERRATA_N2_2743089, neoverse_n2, 2743089
+	report_errata WORKAROUND_CVE_2022_23960, neoverse_n2, cve_2022_23960
+	report_errata ERRATA_DSU_2313941, neoverse_n2, dsu_2313941
 
 	ldp	x8, x30, [sp], #16
 	ret

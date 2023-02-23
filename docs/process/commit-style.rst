@@ -79,11 +79,10 @@ The following `types` are permissible and are strictly enforced:
 +--------------+---------------------------------------------------------------+
 
 The permissible `scopes` are more flexible, and we maintain a list of them in
-our :download:`Commitizen configuration file <../../.cz.json>`. Scopes in this
-file are organized by their changelog section, each of which may have one or
-more accepted scopes, but only the first of which is considered to be "blessed".
-Scopes that are not blessed exist for changes submitted before scope enforcement
-came into effect, and are considered deprecated.
+our :download:`changelog configuration file <../../changelog.yaml>`. Scopes in
+this file are organized by their changelog section, where each changelog section
+has a single scope that is considered to be blessed, and possibly several
+deprecated scopes. Please avoid using deprecated scopes.
 
 While we don't enforce scopes strictly, we do ask that commits use these if they
 can, or add their own if no appropriate one exists (see :ref:`Adding Scopes`).
@@ -97,36 +96,25 @@ locally, as commitlint reports a live list of the acceptable scopes.
 Adding Scopes
 -------------
 
-Scopes that are either a) unblessed in the configuration file, or b) do not
-exist in the configuration file at all are considered to be deprecated. If you
-are adding a new component that does not yet have a designated scope, please
-feel free to add one.
+Scopes that are not present in the changelog configuration file are considered
+to be deprecated, and should be avoided. If you are adding a new component that
+does not yet have a designated scope, please add one.
 
 For example, if you are adding or making modifications to `Foo`'s latest and
-greatest new platform `Bar`, you would add it to the `Platforms` changelog
-section, and the hierarchy should look something like this:
+greatest new platform `Bar` then you would add it to the `Platforms` changelog
+sub-section, and the hierarchy should look something like this:
 
-.. code:: json
+.. code:: yaml
 
-    {
-        "sections": [
-            {
-                "title": "Platforms",
-                "sections": [
-                    {
-                        "title": "Foo",
-                        "scopes": ["foo"],
-                        "sections": [
-                            {
-                                "title": "Bar",
-                                "scopes": ["bar"]
-                            }
-                        ]
-                    }
-                ]
-            }
-        ]
-    }
+    - title: Platforms
+
+      subsections:
+        - title: Foo
+          scope: foo
+
+          subsections:
+            - title: Bar
+              scope: bar
 
 When creating new scopes, try to keep them short and succinct, and use kebab
 case (``this-is-kebab-case``). Components with a product name (i.e. most
@@ -139,7 +127,9 @@ Mandated Trailers
 
 Commits are expected to be signed off with the ``Signed-off-by:`` trailer using
 your real name and email address. You can do this automatically by committing
-with Git's ``-s`` flag.
+with Git's ``-s`` flag. By adding this line the contributor certifies the
+contribution is made under the terms of the :download:`Developer Certificate of
+Origin <../../dco.txt>`.
 
 There may be multiple ``Signed-off-by:`` lines depending on the history of the
 patch, but one **must** be the committer. More details may be found in the

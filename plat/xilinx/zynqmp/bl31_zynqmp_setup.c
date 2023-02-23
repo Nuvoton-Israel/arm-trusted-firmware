@@ -33,15 +33,18 @@ static entry_point_info_t bl33_image_ep_info;
  * while BL32 corresponds to the secure image type. A NULL pointer is returned
  * if the image does not exist.
  */
-entry_point_info_t *bl31_plat_get_next_image_ep_info(uint32_t type)
+struct entry_point_info *bl31_plat_get_next_image_ep_info(uint32_t type)
 {
-	assert(sec_state_is_valid(type));
+	entry_point_info_t *next_image_info;
 
+	assert(sec_state_is_valid(type));
 	if (type == NON_SECURE) {
-		return &bl33_image_ep_info;
+		next_image_info = &bl33_image_ep_info;
+	} else {
+		next_image_info = &bl32_image_ep_info;
 	}
 
-	return &bl32_image_ep_info;
+	return next_image_info;
 }
 
 /*
@@ -68,7 +71,7 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 {
 	uint64_t atf_handoff_addr;
 
-	if (ZYNQMP_CONSOLE_IS(cadence)) {
+	if (ZYNQMP_CONSOLE_IS(cadence) || (ZYNQMP_CONSOLE_IS(cadence1))) {
 		/* Register the console to provide early debug support */
 		static console_t bl31_boot_console;
 		(void)console_cdns_register(ZYNQMP_UART_BASE,
@@ -79,10 +82,12 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 				  CONSOLE_FLAG_RUNTIME | CONSOLE_FLAG_BOOT);
 	} else if (ZYNQMP_CONSOLE_IS(dcc)) {
 		/* Initialize the dcc console for debug */
-		int rc = console_dcc_register();
+		int32_t rc = console_dcc_register();
 		if (rc == 0) {
 			panic();
 		}
+	} else {
+		ERROR("BL31: No console device found.\n");
 	}
 	/* Initialize the platform config for future decision making */
 	zynqmp_config_setup();
@@ -119,10 +124,10 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 			panic();
 		}
 	}
-	if (bl32_image_ep_info.pc) {
+	if (bl32_image_ep_info.pc != 0) {
 		VERBOSE("BL31: Secure code at 0x%lx\n", bl32_image_ep_info.pc);
 	}
-	if (bl33_image_ep_info.pc) {
+	if (bl33_image_ep_info.pc != 0) {
 		VERBOSE("BL31: Non secure code at 0x%lx\n", bl33_image_ep_info.pc);
 	}
 }
@@ -171,7 +176,7 @@ static void prepare_dtb(void)
 
 	/* Return if no device tree is detected */
 	if (fdt_check_header(dtb) != 0) {
-		NOTICE("Can't read DT at 0x%p\n", dtb);
+		NOTICE("Can't read DT at %p\n", dtb);
 		return;
 	}
 

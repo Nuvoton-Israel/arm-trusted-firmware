@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2017-2018, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2017-2020, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2020-2022, Xilinx, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -17,7 +18,6 @@
 #include <lib/mmio.h>
 
 #include <ipi.h>
-#include <plat_ipi.h>
 #include <plat_private.h>
 
 /*********************************************************************
@@ -69,8 +69,9 @@ static inline int is_ipi_mb_within_range(uint32_t local, uint32_t remote)
 {
 	int ret = 1;
 
-	if (remote >= ipi_total || local >= ipi_total)
+	if (remote >= ipi_total || local >= ipi_total) {
 		ret = 0;
+	}
 
 	return ret;
 }
@@ -88,12 +89,15 @@ int ipi_mb_validate(uint32_t local, uint32_t remote, unsigned int is_secure)
 {
 	int ret = 0;
 
-	if (!is_ipi_mb_within_range(local, remote))
+	if (!is_ipi_mb_within_range(local, remote)) {
 		ret = -EINVAL;
-	else if (IPI_IS_SECURE(local) && !is_secure)
+	} else if (IPI_IS_SECURE(local) && !is_secure) {
 		ret = -EPERM;
-	else if (IPI_IS_SECURE(remote) && !is_secure)
+	} else if (IPI_IS_SECURE(remote) && !is_secure) {
 		ret = -EPERM;
+	} else {
+		/* To fix the misra 15.7 warning */
+	}
 
 	return ret;
 }
@@ -137,15 +141,17 @@ void ipi_mb_release(uint32_t local, uint32_t remote)
  */
 int ipi_mb_enquire_status(uint32_t local, uint32_t remote)
 {
-	int ret = 0;
+	int ret = 0U;
 	uint32_t status;
 
 	status = mmio_read_32(IPI_REG_BASE(local) + IPI_OBR_OFFSET);
-	if (status & IPI_BIT_MASK(remote))
+	if (status & IPI_BIT_MASK(remote)) {
 		ret |= IPI_MB_STATUS_SEND_PENDING;
+	}
 	status = mmio_read_32(IPI_REG_BASE(local) + IPI_ISR_OFFSET);
-	if (status & IPI_BIT_MASK(remote))
+	if (status & IPI_BIT_MASK(remote)) {
 		ret |= IPI_MB_STATUS_RECV_PENDING;
+	}
 
 	return ret;
 }

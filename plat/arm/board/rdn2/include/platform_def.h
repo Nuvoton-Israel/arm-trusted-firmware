@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2020-2022, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -13,6 +13,8 @@
 
 #if (CSS_SGI_PLATFORM_VARIANT == 1)
 #define PLAT_ARM_CLUSTER_COUNT		U(8)
+#elif (CSS_SGI_PLATFORM_VARIANT == 2)
+#define PLAT_ARM_CLUSTER_COUNT		U(4)
 #else
 #define PLAT_ARM_CLUSTER_COUNT		U(16)
 #endif
@@ -34,6 +36,8 @@
 
 #if (CSS_SGI_PLATFORM_VARIANT == 1)
 #define TZC400_COUNT			U(2)
+#elif (CSS_SGI_PLATFORM_VARIANT == 2)
+#define TZC400_COUNT			U(4)
 #else
 #define TZC400_COUNT			U(8)
 #endif
@@ -64,8 +68,16 @@
  * Physical and virtual address space limits for MMU in AARCH64 & AARCH32 modes
  */
 #ifdef __aarch64__
-#define PLAT_PHY_ADDR_SPACE_SIZE	(1ULL << 42)
-#define PLAT_VIRT_ADDR_SPACE_SIZE	(1ULL << 42)
+#if (CSS_SGI_PLATFORM_VARIANT == 2)
+#define CSS_SGI_ADDR_BITS_PER_CHIP	U(46)	/* 64TB */
+#else
+#define CSS_SGI_ADDR_BITS_PER_CHIP	U(42)	/* 4TB */
+#endif
+
+#define PLAT_PHY_ADDR_SPACE_SIZE	CSS_SGI_REMOTE_CHIP_MEM_OFFSET( \
+						CSS_SGI_CHIP_COUNT)
+#define PLAT_VIRT_ADDR_SPACE_SIZE	CSS_SGI_REMOTE_CHIP_MEM_OFFSET( \
+						CSS_SGI_CHIP_COUNT)
 #else
 #define PLAT_PHY_ADDR_SPACE_SIZE	(1ULL << 32)
 #define PLAT_VIRT_ADDR_SPACE_SIZE	(1ULL << 32)
@@ -75,10 +87,17 @@
 #define PLAT_ARM_GICD_BASE		UL(0x30000000)
 #define PLAT_ARM_GICC_BASE		UL(0x2C000000)
 
+/* Virtual address used by dynamic mem_protect for chunk_base */
+#define PLAT_ARM_MEM_PROTEC_VA_FRAME	UL(0xC0000000)
+
 #if (CSS_SGI_PLATFORM_VARIANT == 1)
 #define PLAT_ARM_GICR_BASE		UL(0x30100000)
 #else
 #define PLAT_ARM_GICR_BASE		UL(0x301C0000)
 #endif
+
+/* Interrupt priority level for shutdown/reboot */
+#define PLAT_REBOOT_PRI		GIC_HIGHEST_SEC_PRIORITY
+#define PLAT_EHF_DESC		EHF_PRI_DESC(PLAT_PRI_BITS, PLAT_REBOOT_PRI)
 
 #endif /* PLATFORM_DEF_H */

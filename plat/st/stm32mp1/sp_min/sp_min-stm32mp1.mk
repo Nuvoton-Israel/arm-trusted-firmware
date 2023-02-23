@@ -1,10 +1,18 @@
 #
-# Copyright (c) 2017-2019, ARM Limited and Contributors. All rights reserved.
+# Copyright (c) 2017-2022, ARM Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
+ifeq ($(STM32MP13),1)
+$(error "SP_min is not supported on STM32MP13 platform")
+endif
+
 SP_MIN_WITH_SECURE_FIQ	:=	1
+
+override ENABLE_PIE	:=	1
+BL32_CFLAGS		+=	-fpie -DENABLE_PIE
+BL32_LDFLAGS		+=	$(PIE_LDFLAGS)
 
 BL32_CFLAGS		+=	-DSTM32MP_SHARED_RESOURCES
 

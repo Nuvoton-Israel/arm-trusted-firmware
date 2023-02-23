@@ -9,7 +9,7 @@
 
 #include <drivers/arm/tzc400.h>
 #if TRUSTED_BOARD_BOOT
-#include <drivers/auth/mbedtls/mbedtls_config.h>
+#include MBEDTLS_CONFIG_FILE
 #endif
 #include <plat/arm/board/common/board_css_def.h>
 #include <plat/arm/board/common/v2m_def.h>
@@ -195,12 +195,6 @@
 #elif defined(IMAGE_BL32)
 # define PLATFORM_STACK_SIZE		UL(0x440)
 #endif
-
-/*
- * Since free SRAM space is scant, enable the ASSERTION message size
- * optimization by fixing the PLAT_LOG_LEVEL_ASSERT to LOG_LEVEL_INFO (40).
- */
-#define PLAT_LOG_LEVEL_ASSERT		40
 
 /* CCI related constants */
 #define PLAT_ARM_CCI_BASE		UL(0x2c090000)

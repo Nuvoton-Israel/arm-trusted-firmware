@@ -1,5 +1,6 @@
 #
 # Copyright (c) 2013-2021, ARM Limited and Contributors. All rights reserved.
+# Portions copyright (c) 2021-2022, ProvenRun S.A.S. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -11,15 +12,28 @@ SEPARATE_CODE_AND_RODATA := 1
 ZYNQMP_WDT_RESTART := 0
 IPI_CRC_CHECK := 0
 override RESET_TO_BL31 := 1
-override GICV2_G0_FOR_EL3 := 1
 override WARMBOOT_ENABLE_DCACHE_EARLY := 1
 
 EL3_EXCEPTION_HANDLING := $(SDEI_SUPPORT)
+
+# pncd SPD requires secure SGI to be handled at EL1
+ifeq (${SPD},pncd)
+ifeq (${ZYNQMP_WDT_RESTART},1)
+$(error "Error: ZYNQMP_WDT_RESTART and SPD=pncd are incompatible")
+endif
+override GICV2_G0_FOR_EL3 := 0
+else
+override GICV2_G0_FOR_EL3 := 1
+endif
 
 # Do not enable SVE
 ENABLE_SVE_FOR_NS	:= 0
 
 WORKAROUND_CVE_2017_5715	:=	0
+
+ARM_XLAT_TABLES_LIB_V1		:=	1
+$(eval $(call assert_boolean,ARM_XLAT_TABLES_LIB_V1))
+$(eval $(call add_define,ARM_XLAT_TABLES_LIB_V1))
 
 ifdef ZYNQMP_ATF_MEM_BASE
     $(eval $(call add_define,ZYNQMP_ATF_MEM_BASE))
@@ -45,15 +59,19 @@ endif
 
 
 ifdef ZYNQMP_WDT_RESTART
-$(eval $(call add_define,ZYNQMP_WDT_RESTART))
+    $(eval $(call add_define,ZYNQMP_WDT_RESTART))
 endif
 
 ifdef ZYNQMP_IPI_CRC_CHECK
-  $(warning "ZYNQMP_IPI_CRC_CHECK macro is deprecated...instead please use IPI_CRC_CHECK.")
+    $(warning "ZYNQMP_IPI_CRC_CHECK macro is deprecated...instead please use IPI_CRC_CHECK.")
 endif
 
 ifdef IPI_CRC_CHECK
     $(eval $(call add_define,IPI_CRC_CHECK))
+endif
+
+ifdef ZYNQMP_SECURE_EFUSES
+    $(eval $(call add_define,ZYNQMP_SECURE_EFUSES))
 endif
 
 PLAT_INCLUDES		:=	-Iinclude/plat/arm/common/			\

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2021, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2013-2022, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -81,6 +81,10 @@
 #define __RODATA_END__			Load$$__RODATA_EPILOGUE__$$Base
 #define __RT_SVC_DESCS_START__		Load$$__RT_SVC_DESCS__$$Base
 #define __RT_SVC_DESCS_END__		Load$$__RT_SVC_DESCS__$$Limit
+#if SPMC_AT_EL3
+#define __EL3_LP_DESCS_START__		Load$$__EL3_LP_DESCS__$$Base
+#define __EL3_LP_DESCS_END__		Load$$__EL3_LP_DESCS__$$Limit
+#endif
 #define __RW_START__			Load$$LR$$LR_RW_DATA$$Base
 #define __RW_END__			Load$$LR$$LR_END$$Base
 #define __SPM_SHIM_EXCEPTIONS_START__	Load$$__SPM_SHIM_EXCEPTIONS__$$Base
@@ -174,6 +178,7 @@ void dyn_disable_auth(void);
 
 extern const char build_message[];
 extern const char version_string[];
+const char *get_version(void);
 
 void print_entry_point_info(const entry_point_info_t *ep_info);
 uintptr_t page_align(uintptr_t value, unsigned dir);

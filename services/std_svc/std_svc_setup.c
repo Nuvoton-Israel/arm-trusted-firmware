@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2014-2022, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -13,12 +13,12 @@
 #include <lib/pmf/pmf.h>
 #include <lib/psci/psci.h>
 #include <lib/runtime_instr.h>
-#include <services/gtsi_svc.h>
+#include <services/drtm_svc.h>
 #include <services/pci_svc.h>
-#include <services/rmi_svc.h>
 #include <services/rmmd_svc.h>
 #include <services/sdei.h>
 #include <services/spm_mm_svc.h>
+#include <services/spmc_svc.h>
 #include <services/spmd_svc.h>
 #include <services/std_svc.h>
 #include <services/trng_svc.h>
@@ -74,7 +74,16 @@ static int32_t std_svc_setup(void)
 	sdei_init();
 #endif
 
+#if TRNG_SUPPORT
+	/* TRNG initialisation */
 	trng_setup();
+#endif /* TRNG_SUPPORT */
+
+#if DRTM_SUPPORT
+	if (drtm_setup() != 0) {
+		ret = 1;
+	}
+#endif /* DRTM_SUPPORT */
 
 	return ret;
 }
@@ -149,8 +158,8 @@ static uintptr_t std_svc_smc_handler(uint32_t smc_fid,
 	 * dispatcher and return its return value
 	 */
 	if (is_ffa_fid(smc_fid)) {
-		return spmd_smc_handler(smc_fid, x1, x2, x3, x4, cookie,
-					handle, flags);
+		return spmd_ffa_smc_handler(smc_fid, x1, x2, x3, x4, cookie,
+					    handle, flags);
 	}
 #endif
 
@@ -166,15 +175,13 @@ static uintptr_t std_svc_smc_handler(uint32_t smc_fid,
 		return trng_smc_handler(smc_fid, x1, x2, x3, x4, cookie, handle,
 				flags);
 	}
-#endif
+#endif /* TRNG_SUPPORT */
+
 #if ENABLE_RME
-	/*
-	 * Granule transition service interface functions (GTSI) are allocated
-	 * from the Std service range. Call the RMM dispatcher to handle calls.
-	 */
-	if (is_gtsi_fid(smc_fid)) {
-		return rmmd_gtsi_handler(smc_fid, x1, x2, x3, x4, cookie,
-						handle, flags);
+
+	if (is_rmmd_el3_fid(smc_fid)) {
+		return rmmd_rmm_el3_handler(smc_fid, x1, x2, x3, x4, cookie,
+					    handle, flags);
 	}
 
 	if (is_rmi_fid(smc_fid)) {
@@ -189,6 +196,13 @@ static uintptr_t std_svc_smc_handler(uint32_t smc_fid,
 				       flags);
 	}
 #endif
+
+#if DRTM_SUPPORT
+	if (is_drtm_fid(smc_fid)) {
+		return drtm_smc_handler(smc_fid, x1, x2, x3, x4, cookie, handle,
+					flags);
+	}
+#endif /* DRTM_SUPPORT */
 
 	switch (smc_fid) {
 	case ARM_STD_SVC_CALL_COUNT:

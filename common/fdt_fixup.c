@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2016-2022, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -394,6 +394,110 @@ int fdt_add_cpus_node(void *dtb, unsigned int afflv0,
 	return offs;
 }
 
+/*******************************************************************************
+ * fdt_add_cpu_idle_states() - add PSCI CPU idle states to cpu nodes in the DT
+ * @dtb:	pointer to the device tree blob in memory
+ * @states:	array of idle state descriptions, ending with empty element
+ *
+ * Add information about CPU idle states to the devicetree. This function
+ * assumes that CPU idle states are not already present in the devicetree, and
+ * that all CPU states are equally applicable to all CPUs.
+ *
+ * See arm/idle-states.yaml and arm/psci.yaml in the (Linux kernel) DT binding
+ * documentation for more details.
+ *
+ * Return: 0 on success, a negative error value otherwise.
+ ******************************************************************************/
+int fdt_add_cpu_idle_states(void *dtb, const struct psci_cpu_idle_state *state)
+{
+	int cpu_node, cpus_node, idle_states_node, ret;
+	uint32_t count, phandle;
+
+	ret = fdt_find_max_phandle(dtb, &phandle);
+	phandle++;
+	if (ret < 0) {
+		return ret;
+	}
+
+	cpus_node = fdt_path_offset(dtb, "/cpus");
+	if (cpus_node < 0) {
+		return cpus_node;
+	}
+
+	/* Create the idle-states node and its child nodes. */
+	idle_states_node = fdt_add_subnode(dtb, cpus_node, "idle-states");
+	if (idle_states_node < 0) {
+		return idle_states_node;
+	}
+
+	ret = fdt_setprop_string(dtb, idle_states_node, "entry-method", "psci");
+	if (ret < 0) {
+		return ret;
+	}
+
+	for (count = 0U; state->name != NULL; count++, phandle++, state++) {
+		int idle_state_node;
+
+		idle_state_node = fdt_add_subnode(dtb, idle_states_node,
+						  state->name);
+		if (idle_state_node < 0) {
+			return idle_state_node;
+		}
+
+		fdt_setprop_string(dtb, idle_state_node, "compatible",
+				   "arm,idle-state");
+		fdt_setprop_u32(dtb, idle_state_node, "arm,psci-suspend-param",
+				state->power_state);
+		if (state->local_timer_stop) {
+			fdt_setprop_empty(dtb, idle_state_node,
+					  "local-timer-stop");
+		}
+		fdt_setprop_u32(dtb, idle_state_node, "entry-latency-us",
+				state->entry_latency_us);
+		fdt_setprop_u32(dtb, idle_state_node, "exit-latency-us",
+				state->exit_latency_us);
+		fdt_setprop_u32(dtb, idle_state_node, "min-residency-us",
+				state->min_residency_us);
+		if (state->wakeup_latency_us) {
+			fdt_setprop_u32(dtb, idle_state_node,
+					"wakeup-latency-us",
+					state->wakeup_latency_us);
+		}
+		fdt_setprop_u32(dtb, idle_state_node, "phandle", phandle);
+	}
+
+	if (count == 0U) {
+		return 0;
+	}
+
+	/* Link each cpu node to the idle state nodes. */
+	fdt_for_each_subnode(cpu_node, dtb, cpus_node) {
+		const char *device_type;
+		fdt32_t *value;
+
+		/* Only process child nodes with device_type = "cpu". */
+		device_type = fdt_getprop(dtb, cpu_node, "device_type", NULL);
+		if (device_type == NULL || strcmp(device_type, "cpu") != 0) {
+			continue;
+		}
+
+		/* Allocate space for the list of phandles. */
+		ret = fdt_setprop_placeholder(dtb, cpu_node, "cpu-idle-states",
+					      count * sizeof(phandle),
+					      (void **)&value);
+		if (ret < 0) {
+			return ret;
+		}
+
+		/* Fill in the phandles of the idle state nodes. */
+		for (uint32_t i = 0U; i < count; ++i) {
+			value[i] = cpu_to_fdt32(phandle - count + i);
+		}
+	}
+
+	return 0;
+}
+
 /**
  * fdt_adjust_gic_redist() - Adjust GICv3 redistributor size
  * @dtb: Pointer to the DT blob in memory
@@ -478,4 +582,45 @@ int fdt_adjust_gic_redist(void *dtb, unsigned int nr_cores,
 	return fdt_setprop_inplace_namelen_partial(dtb, offset, "reg", 3,
 						   (ac + sc + ac) * 4,
 						   val, sc * 4);
+}
+/**
+ * fdt_set_mac_address () - store MAC address in device tree
+ * @dtb:	pointer to the device tree blob in memory
+ * @eth_idx:	number of Ethernet interface in /aliases node
+ * @mac_addr:	pointer to 6 byte MAC address to store
+ *
+ * Use the generic local-mac-address property in a network device DT node
+ * to define the MAC address this device should be using. Many platform
+ * network devices lack device-specific non-volatile storage to hold this
+ * address, and leave it up to firmware to find and store a unique MAC
+ * address in the DT.
+ * The MAC address could be read from some board or firmware defined storage,
+ * or could be derived from some other unique property like a serial number.
+ *
+ * Return: 0 on success, a negative libfdt error value otherwise.
+ */
+int fdt_set_mac_address(void *dtb, unsigned int ethernet_idx,
+			const uint8_t *mac_addr)
+{
+	char eth_alias[12];
+	const char *path;
+	int node;
+
+	if (ethernet_idx > 9U) {
+		return -FDT_ERR_BADVALUE;
+	}
+	snprintf(eth_alias, sizeof(eth_alias), "ethernet%d", ethernet_idx);
+
+	path = fdt_get_alias(dtb, eth_alias);
+	if (path == NULL) {
+		return -FDT_ERR_NOTFOUND;
+	}
+
+	node = fdt_path_offset(dtb, path);
+	if (node < 0) {
+		ERROR("Path \"%s\" not found in DT: %d\n", path, node);
+		return node;
+	}
+
+	return fdt_setprop(dtb, node, "local-mac-address", mac_addr, 6);
 }
