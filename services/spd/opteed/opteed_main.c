@@ -31,6 +31,8 @@
 #include "teesmc_opteed.h"
 #include "teesmc_opteed_macros.h"
 
+#include <lib/mmio.h>
+
 /*******************************************************************************
  * Address of the entrypoint vector table in OPTEE. It is
  * initialised once on the primary core after a cold boot.
@@ -201,6 +203,11 @@ static uintptr_t opteed_smc_handler(uint32_t smc_fid,
 	uint32_t linear_id = plat_my_core_pos();
 	optee_context_t *optee_ctx = &opteed_sp_context[linear_id];
 	uint64_t rc;
+	uintptr_t scrpad_31 = 0xF0800E7C;
+	static uint32_t count = 0;
+	
+	count++;
+	mmio_write_32(scrpad_31, count);
 
 	/*
 	 * Determine which security state this SMC originated from

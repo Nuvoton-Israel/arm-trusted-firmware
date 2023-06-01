@@ -17,6 +17,7 @@
 #include <services/arm_arch_svc.h>
 
 #include "psci_private.h"
+#include <lib/mmio.h>
 
 /*******************************************************************************
  * PSCI frontend api for servicing SMCs. Described in the PSCI spec.
