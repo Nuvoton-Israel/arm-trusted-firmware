@@ -175,7 +175,7 @@
 					ARM_EL3_TZC_DRAM1_SIZE - 1U)
 
 #if 1
-#define ARM_AP_TZC_DRAM1_BASE		0x00100000
+#define ARM_AP_TZC_DRAM1_BASE		0x02100000
 #else
 #define ARM_AP_TZC_DRAM1_BASE		(ARM_DRAM1_BASE +		\
 					 ARM_DRAM1_SIZE -		\
@@ -550,7 +550,7 @@
  */
  #define NEW_SRAM_ALLOCATION
  #ifdef NEW_SRAM_ALLOCATION 
-	#define BL31_BASE				0x1000//0xfffB1000
+	#define BL31_BASE				0x20001000//0xfffB1000
 #else
 	#define BL31_BASE				0xfffD0000//0x0
 #endif

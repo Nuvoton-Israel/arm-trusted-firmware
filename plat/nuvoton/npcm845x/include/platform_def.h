@@ -156,7 +156,7 @@
 /*
  * Load address of BL33 for this platform port
  */
-#define PLAT_ARM_NS_IMAGE_BASE		(ARM_DRAM1_BASE + UL(0x3008000))
+#define PLAT_ARM_NS_IMAGE_BASE		(ARM_DRAM1_BASE + UL(0x6208000))
 
 
 //#define COUNTER_FREQUENCY		0x07735940		//f/4 = 125MHz
