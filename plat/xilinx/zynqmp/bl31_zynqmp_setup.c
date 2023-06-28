@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2013-2021, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2013-2021, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2023, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -16,6 +17,7 @@
 #include <plat/common/platform.h>
 #include <lib/mmio.h>
 
+#include <custom_svc.h>
 #include <plat_startup.h>
 #include <plat_private.h>
 #include <zynqmp_def.h>
@@ -92,10 +94,6 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 	/* Initialize the platform config for future decision making */
 	zynqmp_config_setup();
 
-	/* There are no parameters from BL2 if BL31 is a reset vector */
-	assert(arg0 == 0U);
-	assert(arg1 == 0U);
-
 	/*
 	 * Do initial security configuration to allow DRAM/device access. On
 	 * Base ZYNQMP only DRAM security is programmable (via TrustZone), but
@@ -118,36 +116,45 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 		enum fsbl_handoff ret = fsbl_atf_handover(&bl32_image_ep_info,
 							  &bl33_image_ep_info,
 							  atf_handoff_addr);
-		if (ret == FSBL_HANDOFF_NO_STRUCT) {
-			bl31_set_default_config();
-		} else if (ret != FSBL_HANDOFF_SUCCESS) {
+		if (ret != FSBL_HANDOFF_SUCCESS) {
 			panic();
 		}
 	}
 	if (bl32_image_ep_info.pc != 0) {
-		VERBOSE("BL31: Secure code at 0x%lx\n", bl32_image_ep_info.pc);
+		NOTICE("BL31: Secure code at 0x%lx\n", bl32_image_ep_info.pc);
 	}
 	if (bl33_image_ep_info.pc != 0) {
-		VERBOSE("BL31: Non secure code at 0x%lx\n", bl33_image_ep_info.pc);
+		NOTICE("BL31: Non secure code at 0x%lx\n", bl33_image_ep_info.pc);
 	}
+
+	custom_early_setup();
+
 }
 
 #if ZYNQMP_WDT_RESTART
-static interrupt_type_handler_t type_el3_interrupt_table[MAX_INTR_EL3];
+static zynmp_intr_info_type_el3_t type_el3_interrupt_table[MAX_INTR_EL3];
 
 int request_intr_type_el3(uint32_t id, interrupt_type_handler_t handler)
 {
+	static uint32_t index;
+	uint32_t i;
+
 	/* Validate 'handler' and 'id' parameters */
-	if (!handler || id >= MAX_INTR_EL3) {
+	if (!handler || index >= MAX_INTR_EL3) {
 		return -EINVAL;
 	}
 
 	/* Check if a handler has already been registered */
-	if (type_el3_interrupt_table[id]) {
-		return -EALREADY;
+	for (i = 0; i < index; i++) {
+		if (id == type_el3_interrupt_table[i].id) {
+			return -EALREADY;
+		}
 	}
 
-	type_el3_interrupt_table[id] = handler;
+	type_el3_interrupt_table[index].id = id;
+	type_el3_interrupt_table[index].handler = handler;
+
+	index++;
 
 	return 0;
 }
@@ -156,19 +163,26 @@ static uint64_t rdo_el3_interrupt_handler(uint32_t id, uint32_t flags,
 					  void *handle, void *cookie)
 {
 	uint32_t intr_id;
-	interrupt_type_handler_t handler;
+	uint32_t i;
+	interrupt_type_handler_t handler = NULL;
 
 	intr_id = plat_ic_get_pending_interrupt_id();
-	handler = type_el3_interrupt_table[intr_id];
+
+	for (i = 0; i < MAX_INTR_EL3; i++) {
+		if (intr_id == type_el3_interrupt_table[i].id) {
+			handler = type_el3_interrupt_table[i].handler;
+		}
+	}
+
 	if (handler != NULL) {
-		handler(intr_id, flags, handle, cookie);
+		return handler(intr_id, flags, handle, cookie);
 	}
 
 	return 0;
 }
 #endif
 
-#if (BL31_LIMIT < PLAT_DDR_LOWMEM_MAX)
+#if (defined(XILINX_OF_BOARD_DTB_ADDR) && !IS_TFA_IN_OCM(BL31_BASE))
 static void prepare_dtb(void)
 {
 	void *dtb = (void *)XILINX_OF_BOARD_DTB_ADDR;
@@ -197,8 +211,9 @@ static void prepare_dtb(void)
 	}
 
 	/* Reserve memory used by Trusted Firmware. */
-	if (fdt_add_reserved_memory(dtb, "tf-a", BL31_BASE, BL31_LIMIT - BL31_BASE)) {
-		WARN("Failed to add reserved memory nodes to DT.\n");
+	if (fdt_add_reserved_memory(dtb, "tf-a", BL31_BASE,
+				    BL31_LIMIT - BL31_BASE + 1)) {
+		WARN("Failed to add reserved memory nodes for BL31 to DT.\n");
 	}
 
 	ret = fdt_pack(dtb);
@@ -213,8 +228,8 @@ static void prepare_dtb(void)
 
 void bl31_platform_setup(void)
 {
-#if (BL31_LIMIT < PLAT_DDR_LOWMEM_MAX)
-		prepare_dtb();
+#if (defined(XILINX_OF_BOARD_DTB_ADDR) && !IS_TFA_IN_OCM(BL31_BASE))
+	prepare_dtb();
 #endif
 
 	/* Initialize the gic cpu and distributor interfaces */
@@ -235,6 +250,8 @@ void bl31_plat_runtime_setup(void)
 		panic();
 	}
 #endif
+
+	custom_runtime_setup();
 }
 
 /*
@@ -245,9 +262,8 @@ void bl31_plat_arch_setup(void)
 	plat_arm_interconnect_init();
 	plat_arm_interconnect_enter_coherency();
 
-
 	const mmap_region_t bl_regions[] = {
-#if (BL31_LIMIT < PLAT_DDR_LOWMEM_MAX)
+#if (defined(XILINX_OF_BOARD_DTB_ADDR) && !IS_TFA_IN_OCM(BL31_BASE))
 		MAP_REGION_FLAT(XILINX_OF_BOARD_DTB_ADDR, XILINX_OF_BOARD_DTB_MAX_SIZE,
 			MT_MEMORY | MT_RW | MT_NS),
 #endif
@@ -262,6 +278,8 @@ void bl31_plat_arch_setup(void)
 				MT_DEVICE | MT_RW | MT_SECURE),
 		{0}
 	};
+
+	custom_mmap_add();
 
 	setup_page_tables(bl_regions, plat_arm_get_mmap());
 	enable_mmu_el3(0);

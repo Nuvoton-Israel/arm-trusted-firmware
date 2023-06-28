@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2022, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2013-2023, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -11,7 +11,7 @@
 
 #include <lib/psci/psci.h>
 #if defined(SPD_spmd)
- #include <services/spm_core_manifest.h>
+#include <services/spm_core_manifest.h>
 #endif
 #if ENABLE_RME
 #include <services/rmm_core_manifest.h>
@@ -37,15 +37,23 @@ struct bl_params;
 struct mmap_region;
 struct spm_mm_boot_info;
 struct sp_res_desc;
+struct rmm_manifest;
 enum fw_enc_status_t;
 
 /*******************************************************************************
  * plat_get_rotpk_info() flags
  ******************************************************************************/
 #define ROTPK_IS_HASH			(1 << 0)
+
 /* Flag used to skip verification of the certificate ROTPK while the platform
    ROTPK is not deployed */
 #define ROTPK_NOT_DEPLOYED		(1 << 1)
+
+static inline bool is_rotpk_flags_valid(unsigned int flags)
+{
+	unsigned int valid_flags = ROTPK_IS_HASH;
+	return (flags == ROTPK_NOT_DEPLOYED) || ((flags & ~valid_flags) == 0);
+}
 
 /*******************************************************************************
  * plat_get_enc_key_info() flags
@@ -255,8 +263,8 @@ static inline void bl2_plat_mboot_finish(void)
 #endif /* MEASURED_BOOT */
 
 /*******************************************************************************
- * Mandatory BL2 at EL3 functions: Must be implemented if BL2_AT_EL3 image is
- * supported
+ * Mandatory BL2 at EL3 functions: Must be implemented
+ * if RESET_TO_BL2 image is supported
  ******************************************************************************/
 void bl2_el3_early_platform_setup(u_register_t arg0, u_register_t arg1,
 				  u_register_t arg2, u_register_t arg3);
@@ -322,7 +330,7 @@ int plat_rmmd_get_cca_attest_token(uintptr_t buf, size_t *len,
 int plat_rmmd_get_cca_realm_attest_key(uintptr_t buf, size_t *len,
 				       unsigned int type);
 size_t plat_rmmd_get_el3_rmm_shared_mem(uintptr_t *shared);
-int plat_rmmd_load_manifest(rmm_manifest_t *manifest);
+int plat_rmmd_load_manifest(struct rmm_manifest *manifest);
 #endif
 
 /*******************************************************************************
@@ -344,8 +352,6 @@ int plat_get_nv_ctr(void *cookie, unsigned int *nv_ctr);
 int plat_set_nv_ctr(void *cookie, unsigned int nv_ctr);
 int plat_set_nv_ctr2(void *cookie, const struct auth_img_desc_s *img_desc,
 		unsigned int nv_ctr);
-int plat_convert_pk(void *full_pk_ptr, unsigned int full_pk_len,
-		    void **hashed_pk_ptr, unsigned int *hash_pk_len);
 int get_mbedtls_heap_helper(void **heap_addr, size_t *heap_size);
 int plat_get_enc_key_info(enum fw_enc_status_t fw_enc_status, uint8_t *key,
 			  size_t *key_len, unsigned int *flags,
@@ -420,5 +426,18 @@ int plat_fwu_set_metadata_image_source(unsigned int image_id,
 				       uintptr_t *image_spec);
 void plat_fwu_set_images_source(const struct fwu_metadata *metadata);
 uint32_t plat_fwu_get_boot_idx(void);
+
+/*
+ * Optional function to indicate if cache management operations can be
+ * performed.
+ */
+#if CONDITIONAL_CMO
+uint64_t plat_can_cmo(void);
+#else
+static inline uint64_t plat_can_cmo(void)
+{
+	return 1;
+}
+#endif /* CONDITIONAL_CMO */
 
 #endif /* PLATFORM_H */

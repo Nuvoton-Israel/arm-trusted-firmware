@@ -1,5 +1,7 @@
 /*
- * Copyright (c) 2017-2018, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2017-2018, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2017-2022, Xilinx, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -8,20 +10,12 @@
  * Zynq UltraScale+ MPSoC IPI agent registers access management
  */
 
-#include <errno.h>
-#include <string.h>
-
-#include <common/debug.h>
-#include <common/runtime_svc.h>
-#include <lib/bakery_lock.h>
-#include <lib/mmio.h>
-
+#include <lib/utils_def.h>
 #include <ipi.h>
 #include <plat_ipi.h>
-#include <plat_private.h>
 
 /* Zynqmp ipi configuration table */
-const static struct ipi_config zynqmp_ipi_table[] = {
+static const struct ipi_config zynqmp_ipi_table[] = {
 	/* APU IPI */
 	{
 		.ipi_bit_mask = 0x1,

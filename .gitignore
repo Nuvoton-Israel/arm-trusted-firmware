@@ -30,8 +30,9 @@ tools/amlogic/doimage
 tools/stm32image/*.o
 tools/stm32image/stm32image
 tools/stm32image/stm32image.exe
-tools/sptool/sptool
-tools/sptool/sptool.exe
+tools/sptool/__pycache__/
+tools/encrypt_fw/encrypt_fw
+tools/encrypt_fw/encrypt_fw.exe
 
 # GNU GLOBAL files
 GPATH
@@ -44,3 +45,9 @@ tags
 
 # Node.js
 node_modules/
+
+# common python virtual environment directories
+.env/
+env/
+.venv/
+venv/

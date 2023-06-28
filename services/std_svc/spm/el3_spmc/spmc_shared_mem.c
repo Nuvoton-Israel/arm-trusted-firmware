@@ -1,10 +1,11 @@
 /*
- * Copyright (c) 2022, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2022-2023, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 
 #include <common/debug.h>
 #include <common/runtime_svc.h>
@@ -195,24 +196,23 @@ spmc_shmem_obj_get_emad(const struct ffa_mtd *desc, uint32_t index,
 			uint32_t ffa_version, size_t *emad_size)
 {
 	uint8_t *emad;
+
+	assert(index < desc->emad_count);
+
 	/*
 	 * If the caller is using FF-A v1.0 interpret the descriptor as a v1.0
 	 * format, otherwise assume it is a v1.1 format.
 	 */
 	if (ffa_version == MAKE_FFA_VERSION(1, 0)) {
-		/* Cast our descriptor to the v1.0 format. */
-		struct ffa_mtd_v1_0 *mtd_v1_0 =
-					(struct ffa_mtd_v1_0 *) desc;
-		emad = (uint8_t *)  &(mtd_v1_0->emad);
+		emad = (uint8_t *)desc + offsetof(struct ffa_mtd_v1_0, emad);
 		*emad_size = sizeof(struct ffa_emad_v1_0);
 	} else {
-		if (!is_aligned(desc->emad_offset, 16)) {
-			WARN("Emad offset is not aligned.\n");
-			return NULL;
-		}
+		assert(is_aligned(desc->emad_offset, 16));
 		emad = ((uint8_t *) desc + desc->emad_offset);
 		*emad_size = desc->emad_size;
 	}
+
+	assert(((uint64_t)index * (uint64_t)*emad_size) <= UINT32_MAX);
 	return (emad + (*emad_size * index));
 }
 
@@ -236,10 +236,6 @@ spmc_shmem_obj_get_comp_mrd(struct spmc_shmem_obj *obj, uint32_t ffa_version)
 	struct ffa_emad_v1_0 *emad = spmc_shmem_obj_get_emad(&obj->desc, 0,
 							     ffa_version,
 							     &emad_size);
-	/* Ensure the emad array was found. */
-	if (emad == NULL) {
-		return NULL;
-	}
 
 	/* Ensure the composite descriptor offset is aligned. */
 	if (!is_aligned(emad->comp_mrd_offset, 8)) {
@@ -274,13 +270,15 @@ spmc_shmem_obj_ffa_constituent_size(struct spmc_shmem_obj *obj,
  * spmc_shmem_obj_validate_id - Validate a partition ID is participating in
  *				a given memory transaction.
  * @sp_id:      Partition ID to validate.
- * @desc:       Descriptor of the memory transaction.
- *
+ * @obj:        The shared memory object containing the descriptor
+ *              of the memory transaction.
  * Return: true if ID is valid, else false.
  */
-bool spmc_shmem_obj_validate_id(const struct ffa_mtd *desc, uint16_t sp_id)
+bool spmc_shmem_obj_validate_id(struct spmc_shmem_obj *obj, uint16_t sp_id)
 {
 	bool found = false;
+	struct ffa_mtd *desc = &obj->desc;
+	size_t desc_size = obj->desc_size;
 
 	/* Validate the partition is a valid participant. */
 	for (unsigned int i = 0U; i < desc->emad_count; i++) {
@@ -290,6 +288,15 @@ bool spmc_shmem_obj_validate_id(const struct ffa_mtd *desc, uint16_t sp_id)
 		emad = spmc_shmem_obj_get_emad(desc, i,
 					       MAKE_FFA_VERSION(1, 1),
 					       &emad_size);
+		/*
+		 * Validate the calculated emad address resides within the
+		 * descriptor.
+		 */
+		if ((emad == NULL) || (uintptr_t) emad >=
+		    (uintptr_t)((uint8_t *) desc + desc_size)) {
+			VERBOSE("Invalid emad.\n");
+			break;
+		}
 		if (sp_id == emad->mapd.endpoint_id) {
 			found = true;
 			break;
@@ -385,7 +392,8 @@ spmc_shm_get_v1_1_descriptor_size(struct ffa_mtd_v1_0 *orig, size_t desc_size)
 	      emad_array[0].comp_mrd_offset);
 
 	/* Check the calculated address is within the memory descriptor. */
-	if ((uintptr_t) mrd >= (uintptr_t)((uint8_t *) orig + desc_size)) {
+	if (((uintptr_t) mrd + sizeof(struct ffa_comp_mrd)) >
+	    (uintptr_t)((uint8_t *) orig + desc_size)) {
 		return 0;
 	}
 	size += mrd->address_range_count * sizeof(struct ffa_cons_mrd);
@@ -424,7 +432,8 @@ spmc_shm_get_v1_0_descriptor_size(struct ffa_mtd *orig, size_t desc_size)
 	      emad_array[0].comp_mrd_offset);
 
 	/* Check the calculated address is within the memory descriptor. */
-	if ((uintptr_t) mrd >= (uintptr_t)((uint8_t *) orig + desc_size)) {
+	if (((uintptr_t) mrd + sizeof(struct ffa_comp_mrd)) >
+	    (uintptr_t)((uint8_t *) orig + desc_size)) {
 		return 0;
 	}
 	size += mrd->address_range_count * sizeof(struct ffa_cons_mrd);
@@ -475,6 +484,12 @@ spmc_shm_convert_shmem_obj_from_v1_0(struct spmc_shmem_obj *out_obj,
 
 	/* Copy across the emad structs. */
 	for (unsigned int i = 0U; i < out->emad_count; i++) {
+		/* Bound check for emad array. */
+		if (((uint8_t *)emad_array_in + sizeof(struct ffa_emad_v1_0)) >
+		    ((uint8_t *) mtd_orig + orig->desc_size)) {
+			VERBOSE("%s: Invalid mtd structure.\n", __func__);
+			return false;
+		}
 		memcpy(&emad_array_out[i], &emad_array_in[i],
 		       sizeof(struct ffa_emad_v1_0));
 	}
@@ -542,6 +557,7 @@ spmc_shm_convert_mtd_to_v1_0(struct spmc_shmem_obj *out_obj,
 	size_t mrd_out_offset;
 	size_t emad_out_array_size;
 	size_t mrd_size = 0;
+	size_t orig_desc_size = orig->desc_size;
 
 	/* Populate the v1.0 descriptor format from the v1.1 struct. */
 	out->sender_id = mtd_orig->sender_id;
@@ -559,6 +575,12 @@ spmc_shm_convert_mtd_to_v1_0(struct spmc_shmem_obj *out_obj,
 	/* Copy across the emad structs. */
 	emad_in = emad_array_in;
 	for (unsigned int i = 0U; i < out->emad_count; i++) {
+		/* Bound check for emad array. */
+		if (((uint8_t *)emad_in + sizeof(struct ffa_emad_v1_0)) >
+				((uint8_t *) mtd_orig + orig_desc_size)) {
+			VERBOSE("%s: Invalid mtd structure.\n", __func__);
+			return false;
+		}
 		memcpy(&emad_array_out[i], emad_in,
 		       sizeof(struct ffa_emad_v1_0));
 
@@ -673,6 +695,87 @@ spmc_populate_ffa_v1_0_descriptor(void *dst, struct spmc_shmem_obj *orig_obj,
 		return 0;
 }
 
+static int
+spmc_validate_mtd_start(struct ffa_mtd *desc, uint32_t ffa_version,
+			size_t fragment_length, size_t total_length)
+{
+	unsigned long long emad_end;
+	unsigned long long emad_size;
+	unsigned long long emad_offset;
+	unsigned int min_desc_size;
+
+	/* Determine the appropriate minimum descriptor size. */
+	if (ffa_version == MAKE_FFA_VERSION(1, 0)) {
+		min_desc_size = sizeof(struct ffa_mtd_v1_0);
+	} else if (ffa_version == MAKE_FFA_VERSION(1, 1)) {
+		min_desc_size = sizeof(struct ffa_mtd);
+	} else {
+		return FFA_ERROR_INVALID_PARAMETER;
+	}
+	if (fragment_length < min_desc_size) {
+		WARN("%s: invalid length %zu < %u\n", __func__, fragment_length,
+		     min_desc_size);
+		return FFA_ERROR_INVALID_PARAMETER;
+	}
+
+	if (desc->emad_count == 0U) {
+		WARN("%s: unsupported attribute desc count %u.\n",
+		     __func__, desc->emad_count);
+		return FFA_ERROR_INVALID_PARAMETER;
+	}
+
+	/*
+	 * If the caller is using FF-A v1.0 interpret the descriptor as a v1.0
+	 * format, otherwise assume it is a v1.1 format.
+	 */
+	if (ffa_version == MAKE_FFA_VERSION(1, 0)) {
+		emad_offset = emad_size = sizeof(struct ffa_emad_v1_0);
+	} else {
+		if (!is_aligned(desc->emad_offset, 16)) {
+			WARN("%s: Emad offset %" PRIx32 " is not 16-byte aligned.\n",
+			     __func__, desc->emad_offset);
+			return FFA_ERROR_INVALID_PARAMETER;
+		}
+		if (desc->emad_offset < sizeof(struct ffa_mtd)) {
+			WARN("%s: Emad offset too small: 0x%" PRIx32 " < 0x%zx.\n",
+			     __func__, desc->emad_offset,
+			     sizeof(struct ffa_mtd));
+			return FFA_ERROR_INVALID_PARAMETER;
+		}
+		emad_offset = desc->emad_offset;
+		if (desc->emad_size < sizeof(struct ffa_emad_v1_0)) {
+			WARN("%s: Bad emad size (%" PRIu32 " < %zu).\n", __func__,
+			     desc->emad_size, sizeof(struct ffa_emad_v1_0));
+			return FFA_ERROR_INVALID_PARAMETER;
+		}
+		if (!is_aligned(desc->emad_size, 16)) {
+			WARN("%s: Emad size 0x%" PRIx32 " is not 16-byte aligned.\n",
+			     __func__, desc->emad_size);
+			return FFA_ERROR_INVALID_PARAMETER;
+		}
+		emad_size = desc->emad_size;
+	}
+
+	/*
+	 * Overflow is impossible: the arithmetic happens in at least 64-bit
+	 * precision, but all of the operands are bounded by UINT32_MAX, and
+	 * ((2^32 - 1)^2 + (2^32 - 1) + (2^32 - 1)) = ((2^32 - 1) * (2^32 + 1))
+	 * = (2^64 - 1).
+	 */
+	CASSERT(sizeof(desc->emad_count == 4), assert_emad_count_max_too_large);
+	emad_end = (desc->emad_count * (unsigned long long)emad_size) +
+		   (unsigned long long)sizeof(struct ffa_comp_mrd) +
+		   (unsigned long long)emad_offset;
+
+	if (emad_end > total_length) {
+		WARN("%s: Composite memory region extends beyond descriptor: 0x%llx > 0x%zx\n",
+		     __func__, emad_end, total_length);
+		return FFA_ERROR_INVALID_PARAMETER;
+	}
+
+	return 0;
+}
+
 /**
  * spmc_shmem_check_obj - Check that counts in descriptor match overall size.
  * @obj:	  Object containing ffa_memory_region_descriptor.
@@ -698,7 +801,6 @@ static int spmc_shmem_check_obj(struct spmc_shmem_obj *obj,
 		size_t expected_size;
 		size_t total_page_count;
 		size_t emad_size;
-		size_t desc_size;
 		size_t header_emad_size;
 		uint32_t offset;
 		struct ffa_comp_mrd *comp;
@@ -706,10 +808,6 @@ static int spmc_shmem_check_obj(struct spmc_shmem_obj *obj,
 
 		emad = spmc_shmem_obj_get_emad(&obj->desc, emad_num,
 					       ffa_version, &emad_size);
-		if (emad == NULL) {
-			WARN("%s: invalid emad structure.\n", __func__);
-			return -EINVAL;
-		}
 
 		/*
 		 * Validate the calculated emad address resides within the
@@ -723,13 +821,23 @@ static int spmc_shmem_check_obj(struct spmc_shmem_obj *obj,
 
 		offset = emad->comp_mrd_offset;
 
-		if (ffa_version == MAKE_FFA_VERSION(1, 0)) {
-			desc_size =  sizeof(struct ffa_mtd_v1_0);
+		/*
+		 * The offset provided to the composite memory region descriptor
+		 * should be consistent across endpoint descriptors. Store the
+		 * first entry and compare against subsequent entries.
+		 */
+		if (comp_mrd_offset == 0) {
+			comp_mrd_offset = offset;
 		} else {
-			desc_size =  sizeof(struct ffa_mtd);
+			if (comp_mrd_offset != offset) {
+				ERROR("%s: mismatching offsets provided, %u != %u\n",
+				       __func__, offset, comp_mrd_offset);
+				return -EINVAL;
+			}
+			continue; /* Remainder only executed on first iteration. */
 		}
 
-		header_emad_size = desc_size +
+		header_emad_size = (size_t)((uint8_t *)emad - (uint8_t *)&obj->desc) +
 			(obj->desc.emad_count * emad_size);
 
 		if (offset < header_emad_size) {
@@ -777,29 +885,6 @@ static int spmc_shmem_check_obj(struct spmc_shmem_obj *obj,
 			WARN("%s: invalid object, computed size %zu != size %zu\n",
 			       __func__, expected_size, obj->desc_size);
 			return -EINVAL;
-		}
-
-		if (obj->desc_filled < obj->desc_size) {
-			/*
-			 * The whole descriptor has not yet been received.
-			 * Skip final checks.
-			 */
-			return 0;
-		}
-
-		/*
-		 * The offset provided to the composite memory region descriptor
-		 * should be consistent across endpoint descriptors. Store the
-		 * first entry and compare against subsequent entries.
-		 */
-		if (comp_mrd_offset == 0) {
-			comp_mrd_offset = offset;
-		} else {
-			if (comp_mrd_offset != offset) {
-				ERROR("%s: mismatching offsets provided, %u != %u\n",
-				       __func__, offset, comp_mrd_offset);
-				return -EINVAL;
-			}
 		}
 
 		total_page_count = 0;
@@ -934,16 +1019,17 @@ static long spmc_ffa_fill_desc(struct mailbox *mbox,
 
 	if (obj->desc_filled == 0U) {
 		/* First fragment, descriptor header has been copied */
+		ret = spmc_validate_mtd_start(&obj->desc, ffa_version,
+					      fragment_length, obj->desc_size);
+		if (ret != 0) {
+			goto err_bad_desc;
+		}
+
 		obj->desc.handle = spmc_shmem_obj_state.next_handle++;
 		obj->desc.flags |= mtd_flag;
 	}
 
 	obj->desc_filled += fragment_length;
-	ret = spmc_shmem_check_obj(obj, ffa_version);
-	if (ret != 0) {
-		ret = FFA_ERROR_INVALID_PARAMETER;
-		goto err_bad_desc;
-	}
 
 	handle_low = (uint32_t)obj->desc.handle;
 	handle_high = obj->desc.handle >> 32;
@@ -956,6 +1042,12 @@ static long spmc_ffa_fill_desc(struct mailbox *mbox,
 
 	/* The full descriptor has been received, perform any final checks. */
 
+	ret = spmc_shmem_check_obj(obj, ffa_version);
+	if (ret != 0) {
+		ret = FFA_ERROR_INVALID_PARAMETER;
+		goto err_bad_desc;
+	}
+
 	/*
 	 * If a partition ID resides in the secure world validate that the
 	 * partition ID is for a known partition. Ignore any partition ID
@@ -965,10 +1057,6 @@ static long spmc_ffa_fill_desc(struct mailbox *mbox,
 	for (size_t i = 0; i < obj->desc.emad_count; i++) {
 		emad = spmc_shmem_obj_get_emad(&obj->desc, i, ffa_version,
 					       &emad_size);
-		if (emad == NULL) {
-			ret = FFA_ERROR_INVALID_PARAMETER;
-			goto err_bad_desc;
-		}
 
 		ffa_endpoint_id16_t ep_id = emad->mapd.endpoint_id;
 
@@ -986,18 +1074,11 @@ static long spmc_ffa_fill_desc(struct mailbox *mbox,
 	for (size_t i = 0; i < obj->desc.emad_count; i++) {
 		emad = spmc_shmem_obj_get_emad(&obj->desc, i, ffa_version,
 					       &emad_size);
-		if (emad == NULL) {
-			ret = FFA_ERROR_INVALID_PARAMETER;
-			goto err_bad_desc;
-		}
+
 		for (size_t j = i + 1; j < obj->desc.emad_count; j++) {
 			other_emad = spmc_shmem_obj_get_emad(&obj->desc, j,
 							     ffa_version,
 							     &emad_size);
-			if (other_emad == NULL) {
-				ret = FFA_ERROR_INVALID_PARAMETER;
-				goto err_bad_desc;
-			}
 
 			if (emad->mapd.endpoint_id ==
 				other_emad->mapd.endpoint_id) {
@@ -1116,6 +1197,7 @@ long spmc_ffa_mem_send(uint32_t smc_fid,
 	struct mailbox *mbox = spmc_get_mbox_desc(secure_origin);
 	ffa_mtd_flag32_t mtd_flag;
 	uint32_t ffa_version = get_partition_ffa_version(secure_origin);
+	size_t min_desc_size;
 
 	if (address != 0U || page_count != 0U) {
 		WARN("%s: custom memory region for message not supported.\n",
@@ -1130,11 +1212,18 @@ long spmc_ffa_mem_send(uint32_t smc_fid,
 					     FFA_ERROR_INVALID_PARAMETER);
 	}
 
-	/*
-	 * Check if the descriptor is smaller than the v1.0 descriptor. The
-	 * descriptor cannot be smaller than this structure.
-	 */
-	if (fragment_length < sizeof(struct ffa_mtd_v1_0)) {
+	if (ffa_version == MAKE_FFA_VERSION(1, 0)) {
+		min_desc_size = sizeof(struct ffa_mtd_v1_0);
+	} else if (ffa_version == MAKE_FFA_VERSION(1, 1)) {
+		min_desc_size = sizeof(struct ffa_mtd);
+	} else {
+		WARN("%s: bad FF-A version.\n", __func__);
+		return spmc_ffa_error_return(handle,
+					     FFA_ERROR_INVALID_PARAMETER);
+	}
+
+	/* Check if the descriptor is too small for the FF-A version. */
+	if (fragment_length < min_desc_size) {
 		WARN("%s: bad first fragment size %u < %zu\n",
 		     __func__, fragment_length, sizeof(struct ffa_mtd_v1_0));
 		return spmc_ffa_error_return(handle,
@@ -1442,7 +1531,7 @@ spmc_ffa_mem_retrieve_req(uint32_t smc_fid,
 	}
 
 	/* Validate the caller is a valid participant. */
-	if (!spmc_shmem_obj_validate_id(&obj->desc, sp_ctx->sp_id)) {
+	if (!spmc_shmem_obj_validate_id(obj, sp_ctx->sp_id)) {
 		WARN("%s: Invalid endpoint ID (0x%x).\n",
 			__func__, sp_ctx->sp_id);
 		ret = FFA_ERROR_INVALID_PARAMETER;
@@ -1456,11 +1545,6 @@ spmc_ffa_mem_retrieve_req(uint32_t smc_fid,
 
 		emad = spmc_shmem_obj_get_emad(req, i, ffa_version,
 					       &emad_size);
-		if (emad == NULL) {
-			WARN("%s: invalid emad structure.\n", __func__);
-			ret = FFA_ERROR_INVALID_PARAMETER;
-			goto err_unlock_all;
-		}
 
 		if ((uintptr_t) emad >= (uintptr_t)
 					((uint8_t *) req + total_length)) {
@@ -1484,20 +1568,11 @@ spmc_ffa_mem_retrieve_req(uint32_t smc_fid,
 
 		emad = spmc_shmem_obj_get_emad(req, i, ffa_version,
 					       &emad_size);
-		if (emad == NULL) {
-			ret = FFA_ERROR_INVALID_PARAMETER;
-			goto err_unlock_all;
-		}
 
 		for (size_t j = 0; j < obj->desc.emad_count; j++) {
 			other_emad = spmc_shmem_obj_get_emad(
 					&obj->desc, j, MAKE_FFA_VERSION(1, 1),
 					&emad_size);
-
-			if (other_emad == NULL) {
-				ret = FFA_ERROR_INVALID_PARAMETER;
-				goto err_unlock_all;
-			}
 
 			if (req->emad_count &&
 			    emad->mapd.endpoint_id ==
@@ -1761,7 +1836,7 @@ int spmc_ffa_mem_relinquish(uint32_t smc_fid,
 	}
 
 	/* Validate the caller is a valid participant. */
-	if (!spmc_shmem_obj_validate_id(&obj->desc, sp_ctx->sp_id)) {
+	if (!spmc_shmem_obj_validate_id(obj, sp_ctx->sp_id)) {
 		WARN("%s: Invalid endpoint ID (0x%x).\n",
 			__func__, req->endpoint_array[0]);
 		ret = FFA_ERROR_INVALID_PARAMETER;

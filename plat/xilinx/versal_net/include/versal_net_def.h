@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2022, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2022, Arm Limited and Contributors. All rights reserved.
  * Copyright (c) 2021-2022, Xilinx, Inc. All rights reserved.
- * Copyright (C) 2022, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -13,17 +13,12 @@
 #include <plat/common/common_def.h>
 
 #define MAX_INTR_EL3			2
-/* This part is taken from U-Boot project under GPL that's why dual license above */
-#define __bf_shf(x) (__builtin_ffsll(x) - 1U)
-#define FIELD_GET(_mask, _reg)						\
-	({								\
-		(typeof(_mask))(((_reg) & (_mask)) >> __bf_shf(_mask));	\
-	})
 
 /* List all consoles */
 #define VERSAL_NET_CONSOLE_ID_pl011	U(1)
 #define VERSAL_NET_CONSOLE_ID_pl011_0	U(1)
 #define VERSAL_NET_CONSOLE_ID_pl011_1	U(2)
+#define VERSAL_NET_CONSOLE_ID_dcc	U(3)
 
 #define VERSAL_NET_CONSOLE_IS(con)	(VERSAL_NET_CONSOLE_ID_ ## con == VERSAL_NET_CONSOLE)
 
@@ -53,9 +48,9 @@
 
 #define PSX_CRF_RST_TIMESTAMP_OFFSET	U(0x33C)
 
-#define APU_PCLI			U(0xECB10000)
-#define APU_PCLI_CPU_STEP		U(0x30)
-#define APU_PCLI_CLUSTER_CPU_STEP	(4U * APU_PCLI_CPU_STEP)
+#define APU_PCLI			(0xECB10000ULL)
+#define APU_PCLI_CPU_STEP		(0x30ULL)
+#define APU_PCLI_CLUSTER_CPU_STEP	(4ULL * APU_PCLI_CPU_STEP)
 #define APU_PCLI_CLUSTER_OFFSET		U(0x8000)
 #define APU_PCLI_CLUSTER_STEP		U(0x1000)
 #define PCLI_PREQ_OFFSET		U(0x4)
@@ -67,13 +62,29 @@
 /* Firmware Image Package */
 #define VERSAL_NET_PRIMARY_CPU		U(0)
 
-#define CORE_0_IEN_POWER_OFFSET			(0x00000018U)
+#define CORE_0_ISR_WAKE_OFFSET			(0x00000020ULL)
+#define APU_PCIL_CORE_X_ISR_WAKE_REG(cpu_id)	(APU_PCLI + (CORE_0_ISR_WAKE_OFFSET + \
+						 (APU_PCLI_CPU_STEP * (cpu_id))))
+#define APU_PCIL_CORE_X_ISR_WAKE_MASK		(0x00000001U)
+#define CORE_0_IEN_WAKE_OFFSET			(0x00000028ULL)
+#define APU_PCIL_CORE_X_IEN_WAKE_REG(cpu_id)	(APU_PCLI + (CORE_0_IEN_WAKE_OFFSET + \
+						 (APU_PCLI_CPU_STEP * (cpu_id))))
+#define APU_PCIL_CORE_X_IEN_WAKE_MASK		(0x00000001U)
+#define CORE_0_IDS_WAKE_OFFSET			(0x0000002CULL)
+#define APU_PCIL_CORE_X_IDS_WAKE_REG(cpu_id)	(APU_PCLI + (CORE_0_IDS_WAKE_OFFSET + \
+						 (APU_PCLI_CPU_STEP * (cpu_id))))
+#define APU_PCIL_CORE_X_IDS_WAKE_MASK		(0x00000001U)
+#define CORE_0_ISR_POWER_OFFSET			(0x00000010ULL)
+#define APU_PCIL_CORE_X_ISR_POWER_REG(cpu_id)	(APU_PCLI + (CORE_0_ISR_POWER_OFFSET + \
+						 (APU_PCLI_CPU_STEP * (cpu_id))))
+#define APU_PCIL_CORE_X_ISR_POWER_MASK		U(0x00000001)
+#define CORE_0_IEN_POWER_OFFSET			(0x00000018ULL)
 #define APU_PCIL_CORE_X_IEN_POWER_REG(cpu_id)	(APU_PCLI + (CORE_0_IEN_POWER_OFFSET + \
-						 (0x30 * cpu_id)))
+						 (APU_PCLI_CPU_STEP * (cpu_id))))
 #define APU_PCIL_CORE_X_IEN_POWER_MASK		(0x00000001U)
-#define CORE_0_IDS_POWER_OFFSET			(0x0000001CU)
+#define CORE_0_IDS_POWER_OFFSET			(0x0000001CULL)
 #define APU_PCIL_CORE_X_IDS_POWER_REG(cpu_id)	(APU_PCLI + (CORE_0_IDS_POWER_OFFSET + \
-						 (0x30 * cpu_id)))
+						 (APU_PCLI_CPU_STEP * (cpu_id))))
 #define APU_PCIL_CORE_X_IDS_POWER_MASK		(0x00000001U)
 #define CORE_PWRDN_EN_BIT_MASK			(0x1U)
 
@@ -122,30 +133,20 @@
  * UART related constants
  ******************************************************************************/
 #define VERSAL_NET_UART0_BASE		U(0xF1920000)
+#define VERSAL_NET_UART1_BASE		U(0xF1930000)
+
 #define VERSAL_NET_UART_BAUDRATE	115200
 
-#define VERSAL_NET_UART_BASE		VERSAL_NET_UART0_BASE
+#if VERSAL_NET_CONSOLE_IS(pl011_1)
+#define VERSAL_NET_UART_BASE		VERSAL_NET_UART1_BASE
+#else
+/* Default console is UART0 */
+#define VERSAL_NET_UART_BASE            VERSAL_NET_UART0_BASE
+#endif
 
 #define PLAT_VERSAL_NET_CRASH_UART_BASE		VERSAL_NET_UART_BASE
 #define PLAT_VERSAL_NET_CRASH_UART_CLK_IN_HZ	VERSAL_NET_UART_CLOCK
 #define VERSAL_NET_CONSOLE_BAUDRATE		VERSAL_NET_UART_BAUDRATE
-
-/*******************************************************************************
- * IPI registers and bitfields
- ******************************************************************************/
-#define IPI0_REG_BASE		(0xEB330000U)
-#define IPI0_TRIG_BIT		(1 << 2)
-#define PMC_IPI_TRIG_BIT	(1 << 1)
-#define IPI1_REG_BASE		(0xEB340000U)
-#define IPI1_TRIG_BIT		(1 << 3)
-#define IPI2_REG_BASE		(0xEB350000U)
-#define IPI2_TRIG_BIT		(1 << 4)
-#define IPI3_REG_BASE		(0xEB360000U)
-#define IPI3_TRIG_BIT		(1 << 5)
-#define IPI4_REG_BASE		(0xEB370000U)
-#define IPI4_TRIG_BIT		(1 << 6)
-#define IPI5_REG_BASE		(0xEB380000U)
-#define IPI5_TRIG_BIT		(1 << 7)
 
 /* Processor core device IDs */
 #define PM_DEV_CLUSTER0_ACPU_0	(0x1810C0AFU)

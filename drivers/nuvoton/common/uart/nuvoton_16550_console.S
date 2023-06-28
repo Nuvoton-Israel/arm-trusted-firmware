@@ -1,20 +1,23 @@
 /*
- * Copyright (c) 2015-2018, ARM Limited and Contributors. All rights reserved.
- * Copyright (C) 20122 Nuvoton Ltd.
+ * Copyright (c) 2015-2023, ARM Limited and Contributors. All rights reserved.
  *
+ * Copyright (C) 2022-2023 Nuvoton Ltd.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#include <arch.h>
 #include <asm_macros.S>
 #include <assert_macros.S>
 #include <console_macros.S>
+
+#include <arch.h>
 #include <nuvoton_uart_16550.h>
 
 	/*
 	 * "core" functions are low-level implementations that don't require
 	 * writable memory and are thus safe to call in BL1 crash context.
 	 */
-	 
+
 	.globl console_16550_core_init
 	.globl console_16550_core_putc
 	.globl console_16550_core_getc
@@ -31,11 +34,11 @@
 	 * C Runtime to print debug information. This
 	 * function will be accessed by console_init and
 	 * crash reporting.
-	 * In: x0 - console base address
-	 *     w1 - Uart clock in Hz
-	 *     w2 - Baud rate
-	 * Out: return 1 on success, 0 on error
-	 * Clobber list : x1, x2, x3
+	 * In:	x0 - console base address
+	 *		w1 - Uart clock in Hz
+	 *		w2 - Baud rate
+	 * Out:	return 1 on success, 0 on error
+	 * Clobber list: x1, x2, x3
 	 * -----------------------------------------------
 	 */
 func console_16550_core_init
@@ -88,20 +91,20 @@ endfunc console_16550_core_init
 
 	/* -----------------------------------------------
 	 * int nuvoton_console_16550_register(uintptr_t baseaddr,
-	 *     uint32_t clock, uint32_t baud,
-	 *     console_t *console);
+	 *		uint32_t clock, uint32_t baud,
+	 *		console_t *console);
 	 * Function to initialize and register a new 16550
 	 * console. Storage passed in for the console struct
 	 * *must* be persistent (i.e. not from the stack).
 	 * If w1 (UART clock) is 0, initialisation will be
 	 * skipped, relying on previous code to have done
 	 * this already. w2 is ignored then as well.
-	 * In: x0 - UART register base address
-	 *     w1 - UART clock in Hz
-	 *     w2 - Baud rate (ignored if w1 is 0)
-	 *     x3 - pointer to empty console_t struct
+	 * In:	x0 - UART register base address
+	 *		w1 - UART clock in Hz
+	 *		w2 - Baud rate (ignored if w1 is 0)
+	 *		x3 - pointer to empty console_t struct
 	 * Out: return 1 on success, 0 on error
-	 * Clobber list : x0, x1, x2, x6, x7, x14
+	 * Clobber list: x0, x1, x2, x6, x7, x14
 	 * -----------------------------------------------
 	 */
 func nuvoton_console_16550_register
@@ -129,10 +132,10 @@ endfunc nuvoton_console_16550_register
 	 * int console_16550_core_putc(int c, uintptr_t base_addr)
 	 * Function to output a character over the console. It
 	 * returns the character printed on success or -1 on error.
-	 * In : w0 - character to be printed
-	 *      x1 - console base address
-	 * Out : return -1 on error else return character.
-	 * Clobber list : x2
+	 * In:	w0 - character to be printed
+	 *		x1 - console base address
+	 * Out: return -1 on error else return character.
+	 * Clobber list: x2
 	 * --------------------------------------------------------
 	 */
 func console_16550_core_putc
@@ -165,10 +168,10 @@ endfunc console_16550_core_putc
 	 * int console_16550_putc(int c, console_t *console)
 	 * Function to output a character over the console. It
 	 * returns the character printed on success or -1 on error.
-	 * In : w0 - character to be printed
-	 *      x1 - pointer to console_t structure
-	 * Out : return -1 on error else return character.
-	 * Clobber list : x2
+	 * In:	w0 - character to be printed
+	 *		x1 - pointer to console_t structure
+	 * Out:	return -1 on error else return character.
+	 * Clobber list: x2
 	 * --------------------------------------------------------
 	 */
 func console_16550_putc
@@ -185,9 +188,9 @@ endfunc console_16550_putc
 	 * Function to get a character from the console.
 	 * It returns the character grabbed on success
 	 * or -1 on if no character is available.
-	 * In :  x0 - console base address
-	 * Out : w0 - character if available, else -1
-	 * Clobber list : x0, x1
+	 * In:	x0 - console base address
+	 * Out:	w0 - character if available, else -1
+	 * Clobber list: x0, x1
 	 * ---------------------------------------------
 	 */
 func console_16550_core_getc
@@ -211,9 +214,9 @@ endfunc console_16550_core_getc
 	 * Function to get a character from the console.
 	 * It returns the character grabbed on success
 	 * or -1 on if no character is available.
-	 * In :  x0 - pointer to console_t stucture
-	 * Out : w0 - character if available, else -1
-	 * Clobber list : x0, x1
+	 * In:	x0 - pointer to console_t structure
+	 * Out:	w0 - character if available, else -1
+	 * Clobber list: x0, x1
 	 * ---------------------------------------------
 	 */
 func console_16550_getc
@@ -229,9 +232,9 @@ endfunc console_16550_getc
 	 * int console_16550_core_flush(uintptr_t base_addr)
 	 * Function to force a write of all buffered
 	 * data that hasn't been output.
-	 * In : x0 - console base address
-	 * Out : return -1 on error else return 0.
-	 * Clobber list : x0, x1
+	 * In:	x0 - console base address
+	 * Out:	return -1 on error else return 0.
+	 * Clobber list: x0, x1
 	 * ---------------------------------------------
 	 */
 func console_16550_core_flush
@@ -254,9 +257,9 @@ endfunc console_16550_core_flush
 	 * int console_16550_flush(console_t *console)
 	 * Function to force a write of all buffered
 	 * data that hasn't been output.
-	 * In : x0 - pointer to console_t structure
-	 * Out : return -1 on error else return 0.
-	 * Clobber list : x0, x1
+	 * In:	x0 - pointer to console_t structure
+	 * Out:	return -1 on error else return 0.
+	 * Clobber list: x0, x1
 	 * ---------------------------------------------
 	 */
 func console_16550_flush

@@ -1,12 +1,16 @@
 /*
- * Copyright (c) 2019-2022, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2019-2023, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
 #include <arch_helpers.h>
 #include <common/debug.h>
+#ifndef SOCFPGA_GIC_V3
 #include <drivers/arm/gicv2.h>
+#else
+#include <drivers/arm/gicv3.h>
+#endif
 #include <lib/mmio.h>
 #include <lib/psci/psci.h>
 #include <plat/common/platform.h>
@@ -15,6 +19,7 @@
 #include "socfpga_plat_def.h"
 #include "socfpga_reset_manager.h"
 #include "socfpga_sip_svc.h"
+#include "socfpga_system_manager.h"
 
 
 /*******************************************************************************
@@ -38,11 +43,18 @@ void socfpga_cpu_standby(plat_local_state_t cpu_state)
 int socfpga_pwr_domain_on(u_register_t mpidr)
 {
 	unsigned int cpu_id = plat_core_pos_by_mpidr(mpidr);
+	uint32_t psci_boot = 0x00;
 
 	VERBOSE("%s: mpidr: 0x%lx\n", __func__, mpidr);
 
 	if (cpu_id == -1)
 		return PSCI_E_INTERN_FAIL;
+
+	if (cpu_id == 0x00) {
+		psci_boot = mmio_read_32(SOCFPGA_SYSMGR(BOOT_SCRATCH_COLD_8));
+		psci_boot |= 0x20000; /* bit 17 */
+		mmio_write_32(SOCFPGA_SYSMGR(BOOT_SCRATCH_COLD_8), psci_boot);
+	}
 
 	mmio_write_64(PLAT_CPUID_RELEASE, cpu_id);
 
@@ -138,11 +150,11 @@ static void __dead2 socfpga_system_reset(void)
 
 	memcpy(addr_buf, &intel_rsu_update_address,
 			sizeof(intel_rsu_update_address));
-
-	if (intel_rsu_update_address)
+	if (intel_rsu_update_address) {
 		mailbox_rsu_update(addr_buf);
-	else
+	} else {
 		mailbox_reset_cold();
+	}
 
 	while (1)
 		wfi();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, Intel Corporation. All rights reserved.
+ * Copyright (c) 2019-2023, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -11,8 +11,8 @@
 #include <lib/mmio.h>
 
 #include "agilex_clock_manager.h"
+#include "agilex_system_manager.h"
 #include "socfpga_handoff.h"
-#include "socfpga_system_manager.h"
 
 
 uint32_t wait_pll_lock(void)
@@ -388,12 +388,22 @@ uint32_t get_mmc_clk(void)
 	return mmc_clk;
 }
 
+/* Return MPU clock */
+uint32_t get_mpu_clk(void)
+{
+	uint32_t mpu_clk;
+
+	mpu_clk = get_clk_freq(CLKMGR_MAINPLL_NOCCLK, CLKMGR_MAINPLL_PLLC0,
+				CLKMGR_PERPLL_PLLC0);
+	return mpu_clk;
+}
+
 /* Get cpu freq clock */
 uint32_t get_cpu_clk(void)
 {
 	uint32_t cpu_clk;
 
-	cpu_clk = get_l3_clk()/PLAT_SYS_COUNTER_CONVERT_TO_MHZ;
+	cpu_clk = get_mpu_clk()/PLAT_HZ_CONVERT_TO_MHZ;
 
 	return cpu_clk;
 }

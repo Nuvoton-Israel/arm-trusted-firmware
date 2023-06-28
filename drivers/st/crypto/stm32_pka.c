@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, STMicroelectronics - All Rights Reserved
+ * Copyright (c) 2022-2023, STMicroelectronics - All Rights Reserved
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -19,6 +19,11 @@
 
 #include <platform_def.h>
 
+#if !PKA_USE_NIST_P256 && !PKA_USE_BRAINPOOL_P256R1 && !PKA_USE_BRAINPOOL_P256T1 && \
+	!PKA_USE_NIST_P521
+#error "At least one ECDSA curve needs to be selected"
+#endif
+
 /*
  * For our comprehension in this file
  *  _len are in BITs
@@ -28,10 +33,10 @@
 
 #define UINT8_LEN			8U
 #define UINT64_LEN			(UINT8_LEN * sizeof(uint64_t))
-#define WORD_SIZE			(sizeof(uint64_t))
+#define PKA_WORD_SIZE			(sizeof(uint64_t))
 #define OP_NBW_FROM_LEN(len)		(DIV_ROUND_UP_2EVAL((len), UINT64_LEN) + 1)
 #define OP_NBW_FROM_SIZE(s)		OP_NBW_FROM_LEN((s) * UINT8_LEN)
-#define OP_SIZE_FROM_SIZE(s)		(OP_NBW_FROM_SIZE(s) * WORD_SIZE)
+#define OP_SIZE_FROM_SIZE(s)		(OP_NBW_FROM_SIZE(s) * PKA_WORD_SIZE)
 
 #define DT_PKA_COMPAT			"st,stm32-pka64"
 
@@ -253,13 +258,6 @@ static const struct curve_parameters curve_def[] = {
 };
 
 static struct stm32_pka_platdata pka_pdata;
-
-#pragma weak stm32_pka_get_platdata
-
-int stm32_pka_get_platdata(struct stm32_pka_platdata *pdata)
-{
-	return -ENODEV;
-}
 
 static int stm32_pka_parse_fdt(void)
 {
@@ -583,10 +581,7 @@ int stm32_pka_init(void)
 
 	err = stm32_pka_parse_fdt();
 	if (err != 0) {
-		err = stm32_pka_get_platdata(&pka_pdata);
-		if (err != 0) {
-			return err;
-		}
+		return err;
 	}
 
 	clk_enable(pka_pdata.clock_id);
@@ -700,7 +695,7 @@ int stm32_pka_ecdsa_verif(void *hash, unsigned int hash_size,
 	mmio_setbits_32(base + _PKA_CLRFR, _PKA_IT_PROCEND);
 
 out:
-	/* Disable PKA (will stop all pending proccess and reset RAM) */
+	/* Disable PKA (will stop all pending process and reset RAM) */
 	pka_disable(base);
 
 	return ret;

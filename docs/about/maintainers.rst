@@ -2,12 +2,11 @@ Project Maintenance
 ===================
 
 Trusted Firmware-A (TF-A) is an open governance community project. All
-contributions are ultimately merged by the maintainers listed below. Technical
-ownership of most parts of the codebase falls on the code owners listed
-below. An acknowledgement from these code owners is required before the
-maintainers merge a contribution.
+contributions are reviewed and merged by the community members listed below.
 
-More details may be found in the `Project Maintenance Process`_ document.
+For more details on the roles of `maintainers`, `code owners` and general
+information about code reviews in TF-A project, please refer to the :ref:`Code
+Review Guidelines`.
 
 .. |M| replace:: **Mail**
 .. |G| replace:: **GitHub ID**
@@ -17,6 +16,10 @@ More details may be found in the `Project Maintenance Process`_ document.
 
 Maintainers
 -----------
+
+.. note::
+   If you wish to become a maintainer for TF-A project, please refer to the
+   :ref:`Project Maintenance Processes`.
 
 :|M|: Dan Handley <dan.handley@arm.com>
 :|G|: `danh-arm`_
@@ -50,6 +53,8 @@ Maintainers
 :|G|: `raghuncstate`_
 :|M|: Manish Badarkhe <manish.badarkhe@arm.com>
 :|G|: `ManishVB-Arm`_
+:|M|: Yann Gautier <yann.gautier@st.com>
+:|G|: `Yann-lms`_
 
 LTS Maintainers
 ---------------
@@ -98,6 +103,8 @@ Trusted Boot
 :|G|: `ManishVB-Arm`_
 :|M|: Lauren Wehrmeister <Lauren.Wehrmeister@arm.com>
 :|G|: `laurenw-arm`_
+:|M|: Jimmy Brisson <jimmy.brisson@arm.com>
+:|G|: `jimmy-brisson`_
 :|F|: drivers/auth/
 
 Secure Partition Manager Core (EL3 FF-A SPMC)
@@ -175,10 +182,14 @@ Arm® Ethos™-N NPU driver
 ^^^^^^^^^^^^^^^^^^^^^^^^
 :|M|: Joshua Slater <joshua.slater@arm.com>
 :|G|: `jslater8`_
-:|M|: Mikael Olsson <mikael.olsson@arm.com>
-:|G|: `mikaelolsson-arm`_
+:|M|: Ştefana Simion <stefana.simion@arm.com>
+:|G|: `stefanasimion`_
 :|F|: drivers/arm/ethosn/
 :|F|: include/drivers/arm/ethosn.h
+:|F|: include/drivers/arm/ethosn_cert.h
+:|F|: include/drivers/arm/ethosn_fip.h
+:|F|: include/drivers/arm/ethosn_oid.h
+:|F|: plat/arm/board/juno/juno_ethosn_tzmp1_def.h
 :|F|: plat/arm/common/fconf/fconf_ethosn_getter.c
 :|F|: include/plat/arm/common/fconf_ethosn_getter.h
 :|F|: fdts/juno-ethosn.dtsi
@@ -351,6 +362,8 @@ Measured Boot
 :|G|: `sandrine-bailleux-arm`_
 :|M|: Manish Badarkhe <manish.badarkhe@arm.com>
 :|G|: `ManishVB-Arm`_
+:|M|: Jimmy Brisson <jimmy.brisson@arm.com>
+:|G|: `jimmy-brisson`_
 :|F|: drivers/measured_boot
 :|F|: include/drivers/measured_boot
 :|F|: docs/components/measured_boot
@@ -377,6 +390,8 @@ Platform Security Architecture (PSA) APIs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 :|M|: Sandrine Bailleux <sandrine.bailleux@arm.com>
 :|G|: `sandrine-bailleux-arm`_
+:|M|: Jimmy Brisson <jimmy.brisson@arm.com>
+:|G|: `jimmy-brisson`_
 :|F|: include/lib/psa
 :|F|: lib/psa
 
@@ -473,8 +488,8 @@ Arm Juno Platform port
 
 Arm Morello and N1SDP Platform ports
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-:|M|: Manoj Kumar <manoj.kumar3@arm.com>
-:|G|: `manojkumar-arm`_
+:|M|: Anurag Koul <anurag.koul@arm.com>
+:|G|: `anukou`_
 :|M|: Chandni Cherukuri <chandni.cherukuri@arm.com>
 :|G|: `chandnich`_
 :|F|: plat/arm/board/morello
@@ -506,8 +521,10 @@ Arm Reference Design platform ports
 
 Arm Total Compute platform port
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-:|M|: Anders Dellien <anders.dellien@arm.com>
-:|G|: `andersdellien-arm`_
+:|M|: Vishnu Banavath <vishnu.banavath@arm.com>
+:|G|: `vishnu-banavath`_
+:|M|: Rupinderjit Singh <rupinderjit.singh@arm.com>
+:|G|: `rupsin01`_
 :|F|: plat/arm/board/tc
 
 HiSilicon HiKey and HiKey960 platform ports
@@ -541,6 +558,10 @@ MediaTek platform ports
 :|G|: `mtk-rex-bc-chen`_
 :|M|: Leon Chen <leon.chen@mediatek.com>
 :|G|: `leon-chen-mtk`_
+:|M|: Jason-CH Chen <jason-ch.chen@mediatek.com>
+:|G|: `jason-ch-chen`_
+:|M|: Yidi Lin <yidilin@chromium.org>
+:|G|: `linyidi`_
 :|F|: docs/plat/mt\*.rst
 :|F|: plat/mediatek/
 
@@ -552,6 +573,20 @@ Marvell platform ports and SoC drivers
 :|F|: plat/marvell/
 :|F|: drivers/marvell/
 :|F|: tools/marvell/
+
+Nuvoton npcm845x platform port
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+:|M|: Hila Miranda-Kuzi <hila.miranda.kuzi1@gmail.com>
+:|G|: `hilamirandakuzi1`_
+:|M|: Margarita Glushkin <rutigl@gmail.com>
+:|G|: `rutigl`_
+:|M|: Avi Fishman <avi.fishman@nuvoton.com>
+:|G|: `avifishman`_
+:|F|: docs/plat/npcm845x.rst
+:|F|: drivers/nuvoton/
+:|F|: include/drivers/nuvoton/
+:|F|: include/plat/nuvoton/
+:|F|: plat/nuvoton/
 
 NVidia platform ports
 ^^^^^^^^^^^^^^^^^^^^^
@@ -834,6 +869,8 @@ Cert_create tool
 :|G|: `ManishVB-Arm`_
 :|M|: Lauren Wehrmeister <Lauren.Wehrmeister@arm.com>
 :|G|: `laurenw-arm`_
+:|M|: Jimmy Brisson <jimmy.brisson@arm.com>
+:|G|: `jimmy-brisson`_
 :|F|: tools/cert_create/
 
 Encrypt_fw tool
@@ -902,11 +939,12 @@ Conventional Changelog Extensions
 .. _marex: https://github.com/marex
 .. _masahir0y: https://github.com/masahir0y
 .. _michalsimek: https://github.com/michalsimek
-.. _mikaelolsson-arm: https://github.com/mikaelolsson-arm
 .. _mmind: https://github.com/mmind
 .. _MrVan: https://github.com/MrVan
 .. _mtk-rex-bc-chen: https://github.com/mtk-rex-bc-chen
 .. _leon-chen-mtk: https://github.com/leon-chen-mtk
+.. _jason-ch-chen: https://github.com/jason-ch-chen
+.. _linyidi: https://github.com/linyidi
 .. _niej: https://github.com/niej
 .. _npoushin: https://github.com/npoushin
 .. _prabhakarlad: https://github.com/prabhakarlad
@@ -919,6 +957,7 @@ Conventional Changelog Extensions
 .. _smaeul: https://github.com/smaeul
 .. _soby-mathew: https://github.com/soby-mathew
 .. _sreekare: https://github.com/sreekare
+.. _stefanasimion: https://github.com/stefanasimion
 .. _stephan-gh: https://github.com/stephan-gh
 .. _sieumunt: https://github.com/sieumunt
 .. _BenjaminLimJL: https://github.com/BenjaminLimJL
@@ -942,7 +981,7 @@ Conventional Changelog Extensions
 .. _raghuncstate: https://github.com/raghuncstate
 .. _CJKay: https://github.com/cjkay
 .. _nmenon: https://github.com/nmenon
-.. _manojkumar-arm: https://github.com/manojkumar-arm
+.. _anukou: https://github.com/anukou
 .. _chandnich: https://github.com/chandnich
 .. _abdellatif-elkhlifi: https://github.com/abdellatif-elkhlifi
 .. _vishnu-banavath: https://github.com/vishnu-banavath
@@ -956,5 +995,8 @@ Conventional Changelog Extensions
 .. _marcbonnici: https://github.com/marcbonnici
 .. _jayanthchidanand-arm: https://github.com/jayanthchidanand-arm
 .. _bytefire: https://github.com/bytefire
-
-.. _Project Maintenance Process: https://developer.trustedfirmware.org/w/collaboration/project-maintenance-process/
+.. _rupsin01: https://github.com/rupsin01
+.. _jimmy-brisson: https://github.com/theotherjimmy
+.. _hilamirandakuzi1: https://github.com/hilamirandakuzi1
+.. _rutigl: https://github.com/rutigl
+.. _avifishman: https://github.com/avifishman

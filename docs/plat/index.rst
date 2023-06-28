@@ -26,6 +26,7 @@ Platform Ports
    warp7
    imx8
    imx8m
+   npcm845x
    nxp/index
    poplar
    qemu
@@ -76,7 +77,9 @@ Deprecated platforms
 +----------------+----------------+--------------------+--------------------+
 |    tc0         |      Arm       |        2.8         |       3.0          |
 +----------------+----------------+--------------------+--------------------+
+|    rde1edge    |      Arm       |        2.9         |       3.1          |
++----------------+----------------+--------------------+--------------------+
 
 --------------
 
-*Copyright (c) 2019-2022, Arm Limited. All rights reserved.*
+*Copyright (c) 2019-2023, Arm Limited. All rights reserved.*

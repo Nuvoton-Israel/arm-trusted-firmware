@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2018-2021, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2018-2021, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -32,12 +33,12 @@
  */
 #ifndef VERSAL_ATF_MEM_BASE
 # define BL31_BASE			U(0xfffe0000)
-# define BL31_LIMIT			U(0xffffffff)
+# define BL31_LIMIT			U(0x100000000)
 #else
 # define BL31_BASE			(VERSAL_ATF_MEM_BASE)
-# define BL31_LIMIT			(VERSAL_ATF_MEM_BASE + VERSAL_ATF_MEM_SIZE - 1)
+# define BL31_LIMIT			(VERSAL_ATF_MEM_BASE + VERSAL_ATF_MEM_SIZE)
 # ifdef VERSAL_ATF_MEM_PROGBITS_SIZE
-#  define BL31_PROGBITS_LIMIT		(VERSAL_ATF_MEM_BASE + VERSAL_ATF_MEM_PROGBITS_SIZE - 1)
+#  define BL31_PROGBITS_LIMIT		(VERSAL_ATF_MEM_BASE + VERSAL_ATF_MEM_PROGBITS_SIZE)
 # endif
 #endif
 
@@ -46,10 +47,10 @@
  ******************************************************************************/
 #ifndef VERSAL_BL32_MEM_BASE
 # define BL32_BASE			U(0x60000000)
-# define BL32_LIMIT			U(0x7fffffff)
+# define BL32_LIMIT			U(0x80000000)
 #else
 # define BL32_BASE			(VERSAL_BL32_MEM_BASE)
-# define BL32_LIMIT			(VERSAL_BL32_MEM_BASE + VERSAL_BL32_MEM_SIZE - 1)
+# define BL32_LIMIT			(VERSAL_BL32_MEM_BASE + VERSAL_BL32_MEM_SIZE)
 #endif
 
 /*******************************************************************************
@@ -65,7 +66,7 @@
  * TSP  specific defines.
  ******************************************************************************/
 #define TSP_SEC_MEM_BASE		BL32_BASE
-#define TSP_SEC_MEM_SIZE		(BL32_LIMIT - BL32_BASE + 1)
+#define TSP_SEC_MEM_SIZE		(BL32_LIMIT - BL32_BASE)
 
 /* ID of the secure physical generic timer interrupt used by the TSP */
 #define TSP_IRQ_SEC_PHY_TIMER		ARM_IRQ_SEC_PHY_TIMER
@@ -81,8 +82,8 @@
 #define CACHE_WRITEBACK_SHIFT	6
 #define CACHE_WRITEBACK_GRANULE	(1 << CACHE_WRITEBACK_SHIFT)
 
-#define PLAT_VERSAL_GICD_BASE	U(0xF9000000)
-#define PLAT_VERSAL_GICR_BASE	U(0xF9080000)
+#define PLAT_GICD_BASE_VALUE	U(0xF9000000)
+#define PLAT_GICR_BASE_VALUE	U(0xF9080000)
 
 /*
  * Define a list of Group 1 Secure and Group 0 interrupts as per GICv3
@@ -100,5 +101,7 @@
 #define PLAT_VERSAL_G0_IRQ_PROPS(grp) \
 	INTR_PROP_DESC(PLAT_VERSAL_IPI_IRQ, GIC_HIGHEST_SEC_PRIORITY, grp, \
 			GIC_INTR_CFG_EDGE), \
+
+#define IRQ_MAX		142U
 
 #endif /* PLATFORM_DEF_H */

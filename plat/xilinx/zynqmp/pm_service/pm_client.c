@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2013-2018, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2013-2018, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -21,9 +22,9 @@
 
 #include <plat_ipi.h>
 #include <zynqmp_def.h>
-#include "pm_api_sys.h"
 #include "pm_client.h"
 #include "pm_ipi.h"
+#include "zynqmp_pm_api_sys.h"
 
 #define IRQ_MAX		84U
 #define NUM_GICD_ISENABLER	((IRQ_MAX >> 5U) + 1U)
@@ -34,12 +35,10 @@
 
 DEFINE_BAKERY_LOCK(pm_client_secure_lock);
 
-extern const struct pm_ipi apu_ipi;
-
-const struct pm_ipi apu_ipi = {
-	.local_ipi_id = IPI_ID_APU,
-	.remote_ipi_id = IPI_ID_PMU0,
-	.buffer_base = IPI_BUFFER_APU_BASE,
+static const struct pm_ipi apu_ipi = {
+	.local_ipi_id = IPI_LOCAL_ID,
+	.remote_ipi_id = IPI_REMOTE_ID,
+	.buffer_base = IPI_BUFFER_LOCAL_BASE,
 };
 
 static uint32_t suspend_mode = PM_SUSPEND_MODE_STD;

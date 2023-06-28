@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2022-2023, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -55,11 +55,13 @@
 
 MTK_SIP_SMC_FROM_BL33_TABLE(SMC_ID_EXPAND_AS_EXTERN_SMC_INDEX);
 MTK_SIP_SMC_FROM_NS_EL1_TABLE(SMC_ID_EXPAND_AS_EXTERN_SMC_INDEX);
+MTK_SIP_SMC_FROM_S_EL1_TABLE(SMC_ID_EXPAND_AS_EXTERN_SMC_INDEX);
 
 /* Expand SiP SMC ID table as enum */
 enum {
 	MTK_SIP_SMC_FROM_BL33_TABLE(SMC_ID_EXPAND_AS_ENUM)
 	MTK_SIP_SMC_FROM_NS_EL1_TABLE(SMC_ID_EXPAND_AS_ENUM)
+	MTK_SIP_SMC_FROM_S_EL1_TABLE(SMC_ID_EXPAND_AS_ENUM)
 	MTK_SIP_SMC_MAX_NUMBER
 };
 
@@ -95,7 +97,7 @@ struct smc_descriptor {
 };
 
 /*
- * This function should be implemented in MediaTek SOC directory. It fullfills
+ * This function should be implemented in MediaTek SOC directory. It fulfills
  * MTK_SIP_SET_AUTHORIZED_SECURE_REG SiP call by checking the sreg with the
  * predefined secure register list, if a match was found, set val to sreg.
  *

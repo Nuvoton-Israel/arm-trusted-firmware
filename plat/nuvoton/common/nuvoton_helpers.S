@@ -1,12 +1,15 @@
 /*
- * Copyright (c) 2015-2018, ARM Limited and Contributors. All rights reserved.
- * Copyright (C) 20122 Nuvoton Ltd.
+ * Copyright (c) 2015-2023, ARM Limited and Contributors. All rights reserved.
+ *
+ * Copyright (C) 2022-2023 Nuvoton Ltd.
+ *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
 #include <asm_macros.S>
-#include <platform_def.h>
+
 #include <cortex_a35.h>
+#include <platform_def.h>
 
 	.globl	plat_is_my_cpu_primary
 	.globl	plat_my_core_pos
@@ -50,8 +53,8 @@
 	/* ---------------------------------------------
 	 * void plat_reset_handler(void);
 	 *
-	 * TO Add: Determine the SOC type and call the appropriate reset
-	 * handler.
+	 * To add: Determine the SoC type and call the appropriate
+	 * reset handler.
 	 *-----------------------------------------------	 */
 
 func plat_reset_handler
@@ -101,7 +104,7 @@ endfunc plat_calc_core_pos
 	 * function to get the entrypoint.
 	 * ---------------------------------------------
 	 */
-/* ---------------------------------------------------------------------
+	/* ---------------------------------------------------------------------
 	 * uintptr_t plat_get_my_entrypoint (void);
 	 *
 	 * Main job of this routine is to distinguish between a cold and a warm

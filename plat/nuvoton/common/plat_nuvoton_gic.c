@@ -1,18 +1,19 @@
 /*
- * Copyright (c) 2016-2018, ARM Limited and Contributors. All rights reserved.
- * Copyright (C) 20122 Nuvoton Ltd.
+ * Copyright (c) 2016-2023, ARM Limited and Contributors. All rights reserved.
+ *
+ * Copyright (C) 2022-2023 Nuvoton Ltd.
+ *
  * SPDX-License-Identifier: BSD-3-Clause
  */
-
-#include <platform_def.h>
 
 #include <common/interrupt_props.h>
 #include <drivers/arm/gicv2.h>
 #include <plat/common/platform.h>
+#include <platform_def.h>
 
 static const interrupt_prop_t g0_interrupt_props[] = {
 	INTR_PROP_DESC(FIQ_SMP_CALL_SGI, GIC_HIGHEST_SEC_PRIORITY,
-		       GICV2_INTR_GROUP0, GIC_INTR_CFG_LEVEL),
+			GICV2_INTR_GROUP0, GIC_INTR_CFG_LEVEL),
 };
 
 gicv2_driver_data_t arm_gic_data = {

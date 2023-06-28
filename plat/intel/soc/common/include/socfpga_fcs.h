@@ -72,6 +72,9 @@
 #define FCS_AES_MIN_DATA_SIZE					0x20		/* 32 Byte */
 #define FCS_AES_CMD_MAX_WORD_SIZE				15U
 
+#define FCS_MAX_DATA_SIZE					0x20000000	/* 512 MB */
+#define FCS_MIN_DATA_SIZE					0x8	/* 8 Bytes */
+
 #define FCS_GET_DIGEST_CMD_MAX_WORD_SIZE			7U
 #define FCS_GET_DIGEST_RESP_MAX_WORD_SIZE			19U
 #define FCS_MAC_VERIFY_CMD_MAX_WORD_SIZE			23U
@@ -243,6 +246,11 @@ int intel_fcs_get_digest_update_finalize(uint32_t session_id, uint32_t context_i
 				uint32_t src_addr, uint32_t src_size,
 				uint64_t dst_addr, uint32_t *dst_size,
 				uint8_t is_finalised, uint32_t *mbox_error);
+int intel_fcs_get_digest_smmu_update_finalize(uint32_t session_id, uint32_t context_id,
+				uint32_t src_addr, uint32_t src_size,
+				uint64_t dst_addr, uint32_t *dst_size,
+				uint8_t is_finalised, uint32_t *mbox_error,
+				uint32_t *send_id);
 
 int intel_fcs_mac_verify_init(uint32_t session_id, uint32_t context_id,
 				uint32_t key_id, uint32_t param_size,
@@ -252,6 +260,11 @@ int intel_fcs_mac_verify_update_finalize(uint32_t session_id, uint32_t context_i
 				uint64_t dst_addr, uint32_t *dst_size,
 				uint32_t data_size, uint8_t is_finalised,
 				uint32_t *mbox_error);
+int intel_fcs_mac_verify_smmu_update_finalize(uint32_t session_id, uint32_t context_id,
+				uint32_t src_addr, uint32_t src_size,
+				uint64_t dst_addr, uint32_t *dst_size,
+				uint32_t data_size, uint8_t is_finalised,
+				uint32_t *mbox_error, uint32_t *send_id);
 
 int intel_fcs_ecdsa_hash_sign_init(uint32_t session_id, uint32_t context_id,
 				uint32_t key_id, uint32_t param_size,
@@ -278,6 +291,11 @@ int intel_fcs_ecdsa_sha2_data_sign_update_finalize(uint32_t session_id,
 				uint32_t src_size, uint64_t dst_addr,
 				uint32_t *dst_size, uint8_t is_finalised,
 				uint32_t *mbox_error);
+int intel_fcs_ecdsa_sha2_data_sign_smmu_update_finalize(uint32_t session_id,
+				uint32_t context_id, uint32_t src_addr,
+				uint32_t src_size, uint64_t dst_addr,
+				uint32_t *dst_size, uint8_t is_finalised,
+				uint32_t *mbox_error, uint32_t *send_id);
 
 int intel_fcs_ecdsa_sha2_data_sig_verify_init(uint32_t session_id,
 				uint32_t context_id, uint32_t key_id,
@@ -288,6 +306,12 @@ int intel_fcs_ecdsa_sha2_data_sig_verify_update_finalize(uint32_t session_id,
 				uint32_t src_size, uint64_t dst_addr,
 				uint32_t *dst_size, uint32_t data_size,
 				uint8_t is_finalised, uint32_t *mbox_error);
+int intel_fcs_ecdsa_sha2_data_sig_verify_smmu_update_finalize(uint32_t session_id,
+				uint32_t context_id, uint32_t src_addr,
+				uint32_t src_size, uint64_t dst_addr,
+				uint32_t *dst_size, uint32_t data_size,
+				uint8_t is_finalised, uint32_t *mbox_error,
+				uint32_t *send_id);
 
 int intel_fcs_ecdsa_get_pubkey_init(uint32_t session_id, uint32_t context_id,
 				uint32_t key_id, uint32_t param_size,

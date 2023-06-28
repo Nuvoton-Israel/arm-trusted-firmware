@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2019-2021, Xilinx, Inc. All rights reserved.
+ * Copyright (c) 2019-2022, Xilinx, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -8,28 +9,22 @@
  * Versal IPI agent registers access management
  */
 
-#include <errno.h>
+#include <lib/utils_def.h>
 #include <ipi.h>
 #include <plat_ipi.h>
-#include <plat_private.h>
-#include <string.h>
-#include <common/debug.h>
-#include <common/runtime_svc.h>
-#include <lib/bakery_lock.h>
-#include <lib/mmio.h>
 
 /* versal ipi configuration table */
-const static struct ipi_config versal_ipi_table[] = {
-	/* A72 IPI */
-	[IPI_ID_APU] = {
-		.ipi_bit_mask = IPI0_TRIG_BIT,
-		.ipi_reg_base = IPI0_REG_BASE,
-		.secure_only = 0U,
-	},
-
+static const struct ipi_config versal_ipi_table[] = {
 	/* PMC IPI */
 	[IPI_ID_PMC] = {
 		.ipi_bit_mask = PMC_IPI_TRIG_BIT,
+		.ipi_reg_base = PMC_REG_BASE,
+		.secure_only = 0U,
+	},
+
+	/* A72 IPI */
+	[IPI_ID_APU] = {
+		.ipi_bit_mask = IPI0_TRIG_BIT,
 		.ipi_reg_base = IPI0_REG_BASE,
 		.secure_only = 0U,
 	},

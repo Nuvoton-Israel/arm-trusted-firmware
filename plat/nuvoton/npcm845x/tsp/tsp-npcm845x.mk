@@ -1,6 +1,8 @@
 #
-# Copyright (c) 2014, ARM Limited and Contributors. All rights reserved.
-# Copyright (c) 2017 Nuvoton Technology Corp.
+# Copyright (c) 2014-2023, ARM Limited and Contributors. All rights reserved.
+#
+# Copyright (c) 2017-2023 Nuvoton Technology Corp.
+#
 # SPDX-License-Identifier: BSD-3-Clause
 
 # TSP source files specific to Nuvoton platform

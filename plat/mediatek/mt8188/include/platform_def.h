@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2022-2023, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -21,6 +21,34 @@
 #define MTK_DEV_RNG0_SIZE	(0x600000)
 #define MTK_DEV_RNG1_BASE	(IO_PHYS)
 #define MTK_DEV_RNG1_SIZE	(0x10000000)
+
+#define TOPCKGEN_BASE		(IO_PHYS)
+
+/*******************************************************************************
+ * APUSYS related constants
+ ******************************************************************************/
+#define BCRM_FMEM_PDN_BASE	(IO_PHYS + 0x00276000)
+#define APU_MD32_SYSCTRL	(IO_PHYS + 0x09001000)
+#define APU_MD32_WDT		(IO_PHYS + 0x09002000)
+#define APU_RCX_CONFIG		(IO_PHYS + 0x09020000)
+#define APU_CTRL_DAPC_RCX_BASE	(IO_PHYS + 0x09034000)
+#define APU_NOC_DAPC_RCX_BASE	(IO_PHYS + 0x09038000)
+#define APU_REVISER		(IO_PHYS + 0x0903c000)
+#define APU_RCX_VCORE_CONFIG	(IO_PHYS + 0x090e0000)
+#define APU_MBOX0		(IO_PHYS + 0x090e1000)
+#define APU_MBOX1		(IO_PHYS + 0x090e2000)
+#define APU_RPCTOP		(IO_PHYS + 0x090f0000)
+#define APU_PCUTOP		(IO_PHYS + 0x090f1000)
+#define APU_AO_CTRL		(IO_PHYS + 0x090f2000)
+#define APU_PLL			(IO_PHYS + 0x090f3000)
+#define APU_ACC			(IO_PHYS + 0x090f4000)
+#define APU_SEC_CON		(IO_PHYS + 0x090f5000)
+#define APU_ARETOP_ARE0		(IO_PHYS + 0x090f6000)
+#define APU_ARETOP_ARE1		(IO_PHYS + 0x090f7000)
+#define APU_ARETOP_ARE2		(IO_PHYS + 0x090f8000)
+#define APU_CTRL_DAPC_AO_BASE	(IO_PHYS + 0x090fc000)
+#define APU_ACX0_RPC_LITE	(IO_PHYS + 0x09140000)
+#define BCRM_FMEM_PDN_SIZE	(0x1000)
 
 /*******************************************************************************
  * AUDIO related constants
@@ -57,6 +85,8 @@
 /*******************************************************************************
  * Infra IOMMU related constants
  ******************************************************************************/
+#define INFRACFG_AO_BASE	(IO_PHYS + 0x00001000)
+#define INFRACFG_AO_MEM_BASE	(IO_PHYS + 0x00002000)
 #define PERICFG_AO_BASE		(IO_PHYS + 0x01003000)
 #define PERICFG_AO_REG_SIZE	(0x1000)
 
@@ -108,6 +138,33 @@
 #define SMI_LARB_REG_RNG_SIZE	(0x1000)
 
 /*******************************************************************************
+ * SPM related constants
+ ******************************************************************************/
+#define SPM_BASE		(IO_PHYS + 0x00006000)
+
+/*******************************************************************************
+ * APMIXEDSYS related constants
+ ******************************************************************************/
+#define APMIXEDSYS		(IO_PHYS + 0x0000C000)
+
+/*******************************************************************************
+ * VPPSYS related constants
+ ******************************************************************************/
+#define VPPSYS0_BASE		(IO_PHYS + 0x04000000)
+#define VPPSYS1_BASE		(IO_PHYS + 0x04f00000)
+
+/*******************************************************************************
+ * VDOSYS related constants
+ ******************************************************************************/
+#define VDOSYS0_BASE		(IO_PHYS + 0x0C01D000)
+#define VDOSYS1_BASE		(IO_PHYS + 0x0C100000)
+
+/*******************************************************************************
+ * SSPM_MBOX_3 related constants
+ ******************************************************************************/
+#define SSPM_MBOX_3_BASE	(IO_PHYS + 0x00480000)
+
+/*******************************************************************************
  * DP related constants
  ******************************************************************************/
 #define EDP_SEC_BASE		(IO_PHYS + 0x0C504000)
@@ -144,7 +201,7 @@
  * Platform memory map related constants
  ******************************************************************************/
 #define TZRAM_BASE			(0x54600000)
-#define TZRAM_SIZE			(0x00030000)
+#define TZRAM_SIZE			(0x00040000)
 
 /*******************************************************************************
  * BL31 specific defines.

@@ -11,8 +11,8 @@
 #include <arch_helpers.h>
 #include <common/bl_common.h>
 #include <context.h>
+#include <lib/cpus/errata.h>
 #include <lib/el3_runtime/context_mgmt.h>
-#include <lib/cpus/errata_report.h>
 #include <plat/common/platform.h>
 
 #include "psci_private.h"
@@ -254,6 +254,9 @@ int __init psci_setup(const psci_lib_args_t *lib_args)
 			psci_caps |=  define_psci_cap(PSCI_CPU_SUSPEND_AARCH64);
 		if (psci_plat_pm_ops->get_sys_suspend_power_state != NULL)
 			psci_caps |=  define_psci_cap(PSCI_SYSTEM_SUSPEND_AARCH64);
+#if PSCI_OS_INIT_MODE
+		psci_caps |= define_psci_cap(PSCI_SET_SUSPEND_MODE);
+#endif
 	}
 	if (psci_plat_pm_ops->system_off != NULL)
 		psci_caps |=  define_psci_cap(PSCI_SYSTEM_OFF);

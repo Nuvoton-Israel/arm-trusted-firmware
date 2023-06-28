@@ -193,7 +193,6 @@
 // Only if MTE registers in use
 #define CTX_TFSR_EL2		U(0x100)
 
-// Only if ENABLE_MPAM_FOR_LOWER_ELS==1
 #define CTX_MPAM2_EL2		U(0x108)
 #define CTX_MPAMHCR_EL2		U(0x110)
 #define CTX_MPAMVPM0_EL2	U(0x118)
@@ -229,8 +228,17 @@
 // Register for FEAT_HCX
 #define CTX_HCRX_EL2            U(0x1d0)
 
+// Starting with Armv8.9
+#define CTX_TCR2_EL2            U(0x1d8)
+#define CTX_POR_EL2             U(0x1e0)
+#define CTX_PIRE0_EL2           U(0x1e8)
+#define CTX_PIR_EL2             U(0x1f0)
+#define CTX_S2PIR_EL2		U(0x1f8)
+#define CTX_GCSCR_EL2           U(0x200)
+#define CTX_GCSPR_EL2           U(0x208)
+
 /* Align to the next 16 byte boundary */
-#define CTX_EL2_SYSREGS_END	U(0x1e0)
+#define CTX_EL2_SYSREGS_END	U(0x210)
 
 #endif /* CTX_INCLUDE_EL2_REGS */
 
@@ -445,24 +453,24 @@ typedef struct cpu_context {
  * ensure that the assembler and the compiler view of the offsets of
  * the structure members is the same.
  */
-CASSERT(CTX_GPREGS_OFFSET == __builtin_offsetof(cpu_context_t, gpregs_ctx), \
+CASSERT(CTX_GPREGS_OFFSET == __builtin_offsetof(cpu_context_t, gpregs_ctx),
 	assert_core_context_gp_offset_mismatch);
-CASSERT(CTX_EL1_SYSREGS_OFFSET == __builtin_offsetof(cpu_context_t, el1_sysregs_ctx), \
+CASSERT(CTX_EL1_SYSREGS_OFFSET == __builtin_offsetof(cpu_context_t, el1_sysregs_ctx),
 	assert_core_context_el1_sys_offset_mismatch);
 #if CTX_INCLUDE_EL2_REGS
-CASSERT(CTX_EL2_SYSREGS_OFFSET == __builtin_offsetof(cpu_context_t, el2_sysregs_ctx), \
+CASSERT(CTX_EL2_SYSREGS_OFFSET == __builtin_offsetof(cpu_context_t, el2_sysregs_ctx),
 	assert_core_context_el2_sys_offset_mismatch);
 #endif
 #if CTX_INCLUDE_FPREGS
-CASSERT(CTX_FPREGS_OFFSET == __builtin_offsetof(cpu_context_t, fpregs_ctx), \
+CASSERT(CTX_FPREGS_OFFSET == __builtin_offsetof(cpu_context_t, fpregs_ctx),
 	assert_core_context_fp_offset_mismatch);
 #endif
-CASSERT(CTX_EL3STATE_OFFSET == __builtin_offsetof(cpu_context_t, el3state_ctx), \
+CASSERT(CTX_EL3STATE_OFFSET == __builtin_offsetof(cpu_context_t, el3state_ctx),
 	assert_core_context_el3state_offset_mismatch);
-CASSERT(CTX_CVE_2018_3639_OFFSET == __builtin_offsetof(cpu_context_t, cve_2018_3639_ctx), \
+CASSERT(CTX_CVE_2018_3639_OFFSET == __builtin_offsetof(cpu_context_t, cve_2018_3639_ctx),
 	assert_core_context_cve_2018_3639_offset_mismatch);
 #if CTX_INCLUDE_PAUTH_REGS
-CASSERT(CTX_PAUTH_REGS_OFFSET == __builtin_offsetof(cpu_context_t, pauth_ctx), \
+CASSERT(CTX_PAUTH_REGS_OFFSET == __builtin_offsetof(cpu_context_t, pauth_ctx),
 	assert_core_context_pauth_offset_mismatch);
 #endif
 
@@ -511,50 +519,10 @@ void el1_sysregs_context_restore(el1_sysregs_t *regs);
 #if CTX_INCLUDE_EL2_REGS
 void el2_sysregs_context_save_common(el2_sysregs_t *regs);
 void el2_sysregs_context_restore_common(el2_sysregs_t *regs);
-#if ENABLE_SPE_FOR_LOWER_ELS
-void el2_sysregs_context_save_spe(el2_sysregs_t *regs);
-void el2_sysregs_context_restore_spe(el2_sysregs_t *regs);
-#endif /* ENABLE_SPE_FOR_LOWER_ELS */
 #if CTX_INCLUDE_MTE_REGS
 void el2_sysregs_context_save_mte(el2_sysregs_t *regs);
 void el2_sysregs_context_restore_mte(el2_sysregs_t *regs);
 #endif /* CTX_INCLUDE_MTE_REGS */
-#if ENABLE_MPAM_FOR_LOWER_ELS
-void el2_sysregs_context_save_mpam(el2_sysregs_t *regs);
-void el2_sysregs_context_restore_mpam(el2_sysregs_t *regs);
-#endif /* ENABLE_MPAM_FOR_LOWER_ELS */
-#if ENABLE_FEAT_FGT
-void el2_sysregs_context_save_fgt(el2_sysregs_t *regs);
-void el2_sysregs_context_restore_fgt(el2_sysregs_t *regs);
-#endif /* ENABLE_FEAT_FGT */
-#if ENABLE_FEAT_ECV
-void el2_sysregs_context_save_ecv(el2_sysregs_t *regs);
-void el2_sysregs_context_restore_ecv(el2_sysregs_t *regs);
-#endif /* ENABLE_FEAT_ECV */
-#if ENABLE_FEAT_VHE
-void el2_sysregs_context_save_vhe(el2_sysregs_t *regs);
-void el2_sysregs_context_restore_vhe(el2_sysregs_t *regs);
-#endif /* ENABLE_FEAT_VHE */
-#if RAS_EXTENSION
-void el2_sysregs_context_save_ras(el2_sysregs_t *regs);
-void el2_sysregs_context_restore_ras(el2_sysregs_t *regs);
-#endif /* RAS_EXTENSION */
-#if CTX_INCLUDE_NEVE_REGS
-void el2_sysregs_context_save_nv2(el2_sysregs_t *regs);
-void el2_sysregs_context_restore_nv2(el2_sysregs_t *regs);
-#endif /* CTX_INCLUDE_NEVE_REGS */
-#if ENABLE_TRF_FOR_NS
-void el2_sysregs_context_save_trf(el2_sysregs_t *regs);
-void el2_sysregs_context_restore_trf(el2_sysregs_t *regs);
-#endif /* ENABLE_TRF_FOR_NS */
-#if ENABLE_FEAT_CSV2_2
-void el2_sysregs_context_save_csv2(el2_sysregs_t *regs);
-void el2_sysregs_context_restore_csv2(el2_sysregs_t *regs);
-#endif /* ENABLE_FEAT_CSV2_2 */
-#if ENABLE_FEAT_HCX
-void el2_sysregs_context_save_hcx(el2_sysregs_t *regs);
-void el2_sysregs_context_restore_hcx(el2_sysregs_t *regs);
-#endif /* ENABLE_FEAT_HCX */
 #endif /* CTX_INCLUDE_EL2_REGS */
 
 #if CTX_INCLUDE_FPREGS

@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2018-2022, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2018-2022, Arm Limited and Contributors. All rights reserved.
  * Copyright (c) 2019-2022, Xilinx, Inc. All rights reserved.
- * Copyright (c) 2022, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -11,6 +11,9 @@
 
 #include <plat/arm/common/smccc_def.h>
 #include <plat/common/common_def.h>
+
+#define PLATFORM_MASK                  GENMASK(27U, 24U)
+#define PLATFORM_VERSION_MASK          GENMASK(31U, 28U)
 
 /* number of interrupt handlers. increase as required */
 #define MAX_INTR_EL3			2
@@ -50,6 +53,7 @@
  * CCI-400 related constants
  ******************************************************************************/
 #define PLAT_ARM_CCI_BASE		0xFD000000
+#define PLAT_ARM_CCI_SIZE		0x00100000
 #define PLAT_ARM_CCI_CLUSTER0_SL_IFACE_IX	4
 #define PLAT_ARM_CCI_CLUSTER1_SL_IFACE_IX	5
 
@@ -110,9 +114,6 @@
 #define CRF_RST_APU_ACPU_RESET		(1 << 0)
 #define CRF_RST_APU_ACPU_PWRON_RESET	(1 << 10)
 
-#define FPD_MAINCCI_BASE	0xFD000000
-#define FPD_MAINCCI_SIZE	0x00100000
-
 /* APU registers and bitfields */
 #define FPD_APU_BASE		0xFD5C0000U
 #define FPD_APU_CONFIG_0	(FPD_APU_BASE + 0x20U)
@@ -127,20 +128,5 @@
 /* PMC registers and bitfields */
 #define PMC_GLOBAL_BASE			0xF1110000U
 #define PMC_GLOBAL_GLOB_GEN_STORAGE4	(PMC_GLOBAL_BASE + 0x40U)
-
-/* IPI registers and bitfields */
-#define IPI0_REG_BASE		U(0xFF330000)
-#define IPI0_TRIG_BIT		(1U << 2U)
-#define PMC_IPI_TRIG_BIT	(1U << 1U)
-#define IPI1_REG_BASE		U(0xFF340000)
-#define IPI1_TRIG_BIT		(1U << 3U)
-#define IPI2_REG_BASE		U(0xFF350000)
-#define IPI2_TRIG_BIT		(1U << 4U)
-#define IPI3_REG_BASE		U(0xFF360000)
-#define IPI3_TRIG_BIT		(1U << 5U)
-#define IPI4_REG_BASE		U(0xFF370000)
-#define IPI4_TRIG_BIT		(1U << 5U)
-#define IPI5_REG_BASE		U(0xFF380000)
-#define IPI5_TRIG_BIT		(1U << 6U)
 
 #endif /* VERSAL_DEF_H */

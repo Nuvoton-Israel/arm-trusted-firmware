@@ -63,6 +63,9 @@
 #define MBOX_CMD_QSPI_SET_CS				0x34
 #define MBOX_CMD_QSPI_DIRECT				0x3B
 
+/* SEU Commands */
+#define MBOX_CMD_SEU_ERR_READ				0x3C
+
 /* RSU Commands */
 #define MBOX_GET_SUBPARTITION_TABLE			0x5A
 #define MBOX_RSU_STATUS					0x5B
@@ -129,6 +132,10 @@
 #define MBOX_BUSY					-5
 #define MBOX_TIMEOUT					-2047
 
+/* Key Status */
+#define MBOX_RET_SDOS_DECRYPTION_ERROR_102		-258
+#define MBOX_RET_SDOS_DECRYPTION_ERROR_103		-259
+
 /* Reconfig Status Response */
 #define RECONFIG_STATUS_STATE				0
 #define RECONFIG_STATUS_PIN_STATUS			2
@@ -139,6 +146,7 @@
 #define SOFTFUNC_STATUS_CONF_DONE			(1 << 0)
 #define MBOX_CFGSTAT_STATE_IDLE				0x00000000
 #define MBOX_CFGSTAT_STATE_CONFIG			0x10000000
+#define MBOX_CFGSTAT_VAB_BS_PREAUTH			0x20000000
 #define MBOX_CFGSTAT_STATE_FAILACK			0x08000000
 #define MBOX_CFGSTAT_STATE_ERROR_INVALID		0xf0000001
 #define MBOX_CFGSTAT_STATE_ERROR_CORRUPT		0xf0000002
@@ -236,5 +244,6 @@ int mailbox_rsu_update(uint32_t *flash_offset);
 int mailbox_hps_stage_notify(uint32_t execution_stage);
 int mailbox_hwmon_readtemp(uint32_t chan, uint32_t *resp_buf);
 int mailbox_hwmon_readvolt(uint32_t chan, uint32_t *resp_buf);
+int mailbox_seu_err_status(uint32_t *resp_buf, uint32_t resp_buf_len);
 
 #endif /* SOCFPGA_MBOX_H */

@@ -69,7 +69,7 @@ FVP_R_BL_COMMON_SOURCES		+=	drivers/delay_timer/generic_delay_timer.c
 endif
 
 # Enable Activity Monitor Unit extensions by default
-ENABLE_AMU			:=	1
+ENABLE_FEAT_AMU			:=	2
 
 ifneq (${ENABLE_STACK_PROTECTOR},0)
 FVP_R_BL_COMMON_SOURCES	+=	plat/arm/board/fvp_r/fvp_r_stack_protector.c
@@ -83,6 +83,7 @@ override BL1_SOURCES	:=	drivers/arm/sp805/sp805.c			\
 				drivers/io/io_storage.c				\
 				drivers/io/io_semihosting.c			\
 				lib/cpus/aarch64/cpu_helpers.S			\
+				lib/cpus/errata_report.c			\
 				lib/fconf/fconf_dyn_cfg_getter.c		\
 				lib/semihosting/semihosting.c			\
 				lib/semihosting/${ARCH}/semihosting_call.S	\

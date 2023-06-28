@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2015-2020, ARM Limited and Contributors. All rights reserved.
- * Copyright (C) 20122 Nuvoton Ltd.
+ * Copyright (c) 2015-2023, ARM Limited and Contributors. All rights reserved.
+ *
+ * Copyright (C) 2022-2023 Nuvoton Ltd.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
-
 
 #include <assert.h>
 
@@ -20,26 +20,8 @@
 
 #include <platform_def.h>
 
-
-
-
-
 const mmap_region_t plat_arm_mmap[] = {
 	MAP_DEVICE0,
 	MAP_DEVICE1,
 	{0}
 };
-
-
-#if 0
-
-// USed for HW Validation of Security only
-const mmap_region_t plat_arm_mmap[] = {
-	MAP_DEVICE2,
-	MAP_DEVICE0,
-	MAP_DEVICE1,
-	MAP_SRAM_NS,
-	{0}
-};
-#endif 
-
