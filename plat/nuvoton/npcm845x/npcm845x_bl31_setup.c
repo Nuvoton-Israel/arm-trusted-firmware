@@ -14,6 +14,7 @@
 #include <common/debug.h>
 #include <drivers/console.h>
 #include <drivers/generic_delay_timer.h>
+#include <drivers/ti/uart/uart_16550.h>
 #include <lib/debugfs.h>
 #include <lib/extensions/ras.h>
 #include <lib/mmio.h>
@@ -21,8 +22,6 @@
 #include <npcm845x_clock.h>
 #include <npcm845x_gcr.h>
 #include <npcm845x_lpuart.h>
-#include <npcm845x_trustzone.h>
-#include <nuvoton_uart_16550.h>
 #include <plat/arm/common/plat_arm.h>
 #include <plat/common/platform.h>
 #include <plat_npcm845x.h>
@@ -112,7 +111,7 @@ int board_uart_init(void)
  * Register UART w/o initialization -
  * A clock rate of zero means to skip the initialisation.
  */
-	nuvoton_console_16550_register((uintptr_t)UART_BASE_ADDR, 0, 0, &console);
+	console_16550_register((uintptr_t)UART_BASE_ADDR, 0, 0, &console);
 
 	return 0;
 }

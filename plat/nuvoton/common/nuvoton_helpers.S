@@ -6,8 +6,10 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#include <asm_macros.S>
+#ifndef NUVOTON_HELPERS_S
+#define NUVOTON_HELPERS_S
 
+#include <asm_macros.S>
 #include <cortex_a35.h>
 #include <platform_def.h>
 
@@ -208,3 +210,5 @@ endfunc plat_crash_console_flush
 func platform_mem_init
 	ret
 endfunc platform_mem_init
+
+#endif /* NUVOTON_HELPERS_S */

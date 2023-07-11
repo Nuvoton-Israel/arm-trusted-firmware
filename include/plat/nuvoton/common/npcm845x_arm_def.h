@@ -78,11 +78,6 @@
 #define NPCM845x_REG_BASE			0xf0000000
 #define NPCM845x_REG_SIZE			0x0ff16000
 
-/* Memory location options for TSP */
-#define ARM_TRUSTED_SRAM_ID		0
-#define ARM_TRUSTED_DRAM_ID		1
-#define ARM_DRAM_ID				2
-
 /*
  *				DRAM
  *	0x3fffffff +-------------+

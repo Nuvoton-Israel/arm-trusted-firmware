@@ -123,4 +123,5 @@ struct npcm845x_gcr {
 	unsigned int mfsel_clr6;
 	unsigned int mfsel_clr7;
 };
+
 #endif

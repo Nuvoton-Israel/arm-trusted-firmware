@@ -178,7 +178,6 @@ endif
 
 PLAT_INCLUDES	:=	-Iinclude/plat/nuvoton/npcm845x \
 		-Iinclude/plat/nuvoton/common \
-		-Iinclude/drivers/nuvoton/common \
 		-Iinclude/drivers/nuvoton/npcm845x \
 
 ifeq (${ARCH}, aarch64)
@@ -192,7 +191,7 @@ NPCM850_GIC_SOURCES	:=	${GICV2_SOURCES}
 
 BL31_SOURCES	+=lib/cpus/aarch64/cortex_a35.S \
 		plat/common/plat_psci_common.c \
-		drivers/nuvoton/common/uart/nuvoton_16550_console.S \
+		drivers/ti/uart/aarch64/16550_console.S \
 		plat/nuvoton/npcm845x/npcm845x_psci.c \
 		plat/nuvoton/npcm845x/npcm845x_serial_port.c \
 		plat/nuvoton/common/nuvoton_topology.c \
@@ -270,12 +269,7 @@ endif
 
 # Because BL1/BL2 execute in AArch64 mode but BL32 in AArch32 we need to use
 # the AArch32 descriptors.
-ifeq (${JUNO_AARCH32_EL3_RUNTIME},1)
-BL2_SOURCES	+=	plat/arm/common/aarch32/arm_bl2_mem_params_desc.c
-else
 BL2_SOURCES	+=	plat/arm/common/${ARCH}/arm_bl2_mem_params_desc.c
-endif
-
 BL2_SOURCES	+=	plat/arm/common/arm_image_load.c \
 		common/desc_image_load.c
 
@@ -395,9 +389,6 @@ endif
 BL1_SOURCES	:=
 BL2_SOURCES	:=
 BL2U_SOURCES	:=
-
-IMX_DEBUG_UART	?=	0
-$(eval $(call add_define,IMX_USE_UART${IMX_DEBUG_UART}))
 
 DEBUG_CONSOLE	?=	0
 $(eval $(call add_define,DEBUG_CONSOLE))
