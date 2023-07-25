@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, Arm Limited. All rights reserved.
+# Copyright (c) 2021-2023, Arm Limited. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -20,7 +20,9 @@ CSS_LOAD_SCP_IMAGES	:=	1
 
 CSS_USE_SCMI_SDS_DRIVER	:=	1
 
-RAS_EXTENSION		:=	0
+ENABLE_FEAT_RAS		:=	1
+
+RAS_FFH_SUPPORT		:=	0
 
 SDEI_SUPPORT		:=	0
 
@@ -41,7 +43,7 @@ GIC_ENABLE_V4_EXTN	:=      1
 GICV3_SUPPORT_GIC600	:=	1
 
 # Enable SVE
-ENABLE_SVE_FOR_NS	:=	1
+ENABLE_SVE_FOR_NS	:=	2
 ENABLE_SVE_FOR_SWD	:=	1
 
 # enable trace buffer control registers access to NS by default
@@ -118,7 +120,8 @@ BL31_SOURCES		+=	${INTERCONNECT_SOURCES}	\
 				lib/fconf/fconf_dyn_cfg_getter.c	\
 				drivers/cfi/v2m/v2m_flash.c		\
 				lib/utils/mem_region.c			\
-				plat/arm/common/arm_nor_psci_mem_protect.c
+				plat/arm/common/arm_nor_psci_mem_protect.c	\
+				drivers/arm/sbsa/sbsa.c
 
 BL31_SOURCES		+=	${FDT_WRAPPERS_SOURCES}
 
@@ -158,9 +161,9 @@ override CTX_INCLUDE_AARCH32_REGS	:= 0
 
 override CTX_INCLUDE_PAUTH_REGS	:= 1
 
-override ENABLE_SPE_FOR_LOWER_ELS	:= 0
+override ENABLE_SPE_FOR_NS	:= 0
 
-override ENABLE_AMU := 1
+override ENABLE_FEAT_AMU := 1
 override ENABLE_AMU_AUXILIARY_COUNTERS := 1
 override ENABLE_AMU_FCONF := 1
 
@@ -192,6 +195,35 @@ ifeq (${MEASURED_BOOT},1)
 PLAT_INCLUDES		+=	-Iinclude/lib/psa
 
 endif
+
+ifneq (${PLATFORM_TEST},)
+    $(eval $(call add_define,PLATFORM_TESTS))
+
+    ifeq (${PLATFORM_TEST},rss-nv-counters)
+        include drivers/arm/rss/rss_comms.mk
+
+        # Test code.
+        BL31_SOURCES	+=	plat/arm/board/tc/nv_counter_test.c
+
+        # Code under testing.
+        BL31_SOURCES	+=	lib/psa/rss_platform.c \
+				drivers/arm/rss/rss_comms.c \
+				${RSS_COMMS_SOURCES}
+
+        PLAT_INCLUDES	+=	-Iinclude/lib/psa
+
+        $(eval $(call add_define,PLATFORM_TEST_NV_COUNTERS))
+    else ifeq (${PLATFORM_TEST},tfm-testsuite)
+        # Add this include as first, before arm_common.mk. This is necessary
+        # because arm_common.mk builds Mbed TLS, and platform_test.mk can
+        # change the list of Mbed TLS files that are to be compiled
+        # (LIBMBEDTLS_SRCS).
+        include plat/arm/board/tc/platform_test.mk
+    else
+        $(error "Unsupported PLATFORM_TEST value")
+    endif
+endif
+
 
 include plat/arm/common/arm_common.mk
 include plat/arm/css/common/css_common.mk

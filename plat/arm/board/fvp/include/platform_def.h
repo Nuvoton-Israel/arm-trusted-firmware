@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2014-2023, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -16,6 +16,10 @@
 
 #include "../fvp_def.h"
 
+#if TRUSTED_BOARD_BOOT
+#include MBEDTLS_CONFIG_FILE
+#endif
+
 /* Required platform porting definitions */
 #define PLATFORM_CORE_COUNT  (U(FVP_CLUSTER_COUNT) * \
 			      U(FVP_MAX_CPUS_PER_CLUSTER) * \
@@ -25,6 +29,10 @@
 			      PLATFORM_CORE_COUNT + U(1))
 
 #define PLAT_MAX_PWR_LVL		ARM_PWR_LVL2
+
+#if PSCI_OS_INIT_MODE
+#define PLAT_MAX_CPU_SUSPEND_PWR_LVL	ARM_PWR_LVL1
+#endif
 
 /*
  * Other platform porting definitions are provided by included headers
@@ -164,14 +172,23 @@
 # define MAX_XLAT_TABLES		5
 #else
 # define PLAT_ARM_MMAP_ENTRIES		12
-# define MAX_XLAT_TABLES		6
+# if (defined(SPD_tspd) || defined(SPD_opteed) || defined(SPD_spmd)) && \
+defined(IMAGE_BL2) && MEASURED_BOOT
+#  define MAX_XLAT_TABLES		7
+# else
+#  define MAX_XLAT_TABLES		6
+# endif /* (SPD_tspd || SPD_opteed || SPD_spmd) && IMAGE_BL2 && MEASURED_BOOT */
 #endif
 
 /*
  * PLAT_ARM_MAX_BL1_RW_SIZE is calculated using the current BL1 RW debug size
  * plus a little space for growth.
  */
+#if TF_MBEDTLS_KEY_ALG_ID == TF_MBEDTLS_RSA_AND_ECDSA
+#define PLAT_ARM_MAX_BL1_RW_SIZE	UL(0xC000)
+#else
 #define PLAT_ARM_MAX_BL1_RW_SIZE	UL(0xB000)
+#endif
 
 /*
  * PLAT_ARM_MAX_ROMLIB_RW_SIZE is define to use a full page
@@ -191,10 +208,12 @@
  * PLAT_ARM_MAX_BL2_SIZE is calculated using the current BL2 debug size plus a
  * little space for growth.
  */
-#if TRUSTED_BOARD_BOOT && COT_DESC_IN_DTB
+#if CRYPTO_SUPPORT
+#if (TF_MBEDTLS_KEY_ALG_ID == TF_MBEDTLS_RSA_AND_ECDSA) || COT_DESC_IN_DTB
 # define PLAT_ARM_MAX_BL2_SIZE	(UL(0x1E000) - FVP_BL2_ROMLIB_OPTIMIZATION)
-#elif CRYPTO_SUPPORT
+#else
 # define PLAT_ARM_MAX_BL2_SIZE	(UL(0x1D000) - FVP_BL2_ROMLIB_OPTIMIZATION)
+#endif
 #elif ARM_BL31_IN_DRAM
 /* When ARM_BL31_IN_DRAM is set, BL2 can use almost all of Trusted SRAM. */
 # define PLAT_ARM_MAX_BL2_SIZE	(UL(0x1F000) - FVP_BL2_ROMLIB_OPTIMIZATION)
@@ -378,14 +397,24 @@
 #define PLAT_SDEI_DP_EVENT_MAX_CNT	ARM_SDEI_DP_EVENT_MAX_CNT
 #define PLAT_SDEI_DS_EVENT_MAX_CNT	ARM_SDEI_DS_EVENT_MAX_CNT
 #else
-#define PLAT_ARM_PRIVATE_SDEI_EVENTS	ARM_SDEI_PRIVATE_EVENTS
+  #if PLATFORM_TEST_RAS_FFH
+  #define PLAT_ARM_PRIVATE_SDEI_EVENTS \
+	ARM_SDEI_PRIVATE_EVENTS, \
+	SDEI_EXPLICIT_EVENT(5000, SDEI_MAPF_NORMAL), \
+	SDEI_EXPLICIT_EVENT(5001, SDEI_MAPF_NORMAL), \
+	SDEI_EXPLICIT_EVENT(5002, SDEI_MAPF_NORMAL), \
+	SDEI_EXPLICIT_EVENT(5003, SDEI_MAPF_CRITICAL), \
+	SDEI_EXPLICIT_EVENT(5004, SDEI_MAPF_CRITICAL)
+  #else
+  #define PLAT_ARM_PRIVATE_SDEI_EVENTS	ARM_SDEI_PRIVATE_EVENTS
+  #endif
 #define PLAT_ARM_SHARED_SDEI_EVENTS	ARM_SDEI_SHARED_EVENTS
 #endif
 
 #define PLAT_ARM_SP_IMAGE_STACK_BASE	(PLAT_SP_IMAGE_NS_BUF_BASE +	\
 					 PLAT_SP_IMAGE_NS_BUF_SIZE)
 
-#define PLAT_SP_PRI			PLAT_RAS_PRI
+#define PLAT_SP_PRI			0x20
 
 /*
  * Physical and virtual address space limits for MMU in AARCH64 & AARCH32 modes

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, Arm Limited. All rights reserved.
+ * Copyright (c) 2021-2023, Arm Limited. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -12,40 +12,6 @@
 
 #include "morello_def.h"
 #include <platform_def.h>
-
-#ifdef TARGET_PLATFORM_FVP
-/*
- * Platform information structure stored in SDS.
- * This structure holds information about platform's DDR
- * size
- *	- Local DDR size in bytes, DDR memory in main board
- */
-struct morello_plat_info {
-	uint64_t local_ddr_size;
-} __packed;
-#else
-/*
- * Platform information structure stored in SDS.
- * This structure holds information about platform's DDR
- * size which is an information about multichip setup
- *	- Local DDR size in bytes, DDR memory in main board
- *	- Remote DDR size in bytes, DDR memory in remote board
- *	- remote_chip_count
- *	- multichip mode
- *	- scc configuration
- */
-struct morello_plat_info {
-	uint64_t local_ddr_size;
-	uint64_t remote_ddr_size;
-	uint8_t remote_chip_count;
-	bool multichip_mode;
-	uint32_t scc_config;
-} __packed;
-#endif
-
-/* Compile time assertion to ensure the size of structure is 18 bytes */
-CASSERT(sizeof(struct morello_plat_info) == MORELLO_SDS_PLATFORM_INFO_SIZE,
-		assert_invalid_plat_info_size);
 
 #ifdef TARGET_PLATFORM_SOC
 /*

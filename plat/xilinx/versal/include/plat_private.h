@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2018-2019, Arm Limited and Contributors. All rights reserved.
  * Copyright (c) 2018-2022, Xilinx, Inc. All rights reserved.
  * Copyright (c) 2022, Advanced Micro Devices, Inc. All rights reserved.
  *
@@ -9,7 +9,7 @@
 #ifndef PLAT_PRIVATE_H
 #define PLAT_PRIVATE_H
 
-#include <lib/xlat_tables/xlat_tables.h>
+#include <lib/xlat_tables/xlat_tables_v2.h>
 #include <bl31/interrupt_mgmt.h>
 
 typedef struct versal_intr_info_type_el3 {

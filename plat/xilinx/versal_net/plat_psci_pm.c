@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2022, Xilinx, Inc. All rights reserved.
- * Copyright (C) 2022, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -221,8 +221,10 @@ static int32_t versal_net_validate_power_state(unsigned int power_state,
  */
 static void versal_net_get_sys_suspend_power_state(psci_power_state_t *req_state)
 {
-	req_state->pwr_domain_state[PSCI_CPU_PWR_LVL] = PLAT_MAX_OFF_STATE;
-	req_state->pwr_domain_state[1] = PLAT_MAX_OFF_STATE;
+	uint64_t i;
+
+	for (i = MPIDR_AFFLVL0; i <= PLAT_MAX_PWR_LVL; i++)
+		req_state->pwr_domain_state[i] = PLAT_MAX_OFF_STATE;
 }
 
 static const struct plat_psci_ops versal_net_nopmc_psci_ops = {

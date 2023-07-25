@@ -52,8 +52,14 @@ Common build options
 -  ``BL2U``: This is an optional build option which specifies the path to
    BL2U image. In this case, the BL2U in TF-A will not be built.
 
--  ``BL2_AT_EL3``: This is an optional build option that enables the use of
-   BL2 at EL3 execution level.
+-  ``RESET_TO_BL2``: Boolean option to enable BL2 entrypoint as the CPU reset
+   vector instead of the BL1 entrypoint. It can take the value 0 (CPU reset to BL1
+   entrypoint) or 1 (CPU reset to BL2 entrypoint).
+   The default value is 0.
+
+-  ``BL2_RUNS_AT_EL3``: This is an implicit flag to denote that BL2 runs at EL3.
+   While it is explicitly set to 1 when RESET_TO_BL2 is set to 1 it can also be
+   true in a 4-world system where RESET_TO_BL2 is 0.
 
 -  ``BL2_ENABLE_SP_LOAD``: Boolean option to enable loading SP packages from the
    FIP. Automatically enabled if ``SP_LAYOUT_FILE`` is provided.
@@ -61,8 +67,8 @@ Common build options
 -  ``BL2_IN_XIP_MEM``: In some use-cases BL2 will be stored in eXecute In Place
    (XIP) memory, like BL1. In these use-cases, it is necessary to initialize
    the RW sections in RAM, while leaving the RO sections in place. This option
-   enable this use-case. For now, this option is only supported when BL2_AT_EL3
-   is set to '1'.
+   enable this use-case. For now, this option is only supported
+   when RESET_TO_BL2 is set to '1'.
 
 -  ``BL31``: This is an optional build option which specifies the path to
    BL31 image for the ``fip`` target. In this case, the BL31 in TF-A will not
@@ -164,12 +170,6 @@ Common build options
    is on hardware that does not implement AArch32, or at least not at EL1 and
    higher ELs). Default value is 1.
 
--  ``CTX_INCLUDE_EL2_REGS`` : This boolean option provides context save/restore
-   operations when entering/exiting an EL2 execution context. This is of primary
-   interest when Armv8.4-SecEL2 extension is implemented. Default is 0 (disabled).
-   This option must be equal to 1 (enabled) when ``SPD=spmd`` and
-   ``SPMD_SPM_AT_SEL2`` is set.
-
 -  ``CTX_INCLUDE_FPREGS``: Boolean option that, when set to 1, will cause the FP
    registers to be included when saving and restoring the CPU context. Default
    is 0.
@@ -219,15 +219,16 @@ Common build options
 
 -  ``E``: Boolean option to make warnings into errors. Default is 1.
 
+   When specifying higher warnings levels (``W=1`` and higher), this option
+   defaults to 0. This is done to encourage contributors to use them, as they
+   are expected to produce warnings that would otherwise fail the build. New
+   contributions are still expected to build with ``W=0`` and ``E=1`` (the
+   default).
+
 -  ``EL3_PAYLOAD_BASE``: This option enables booting an EL3 payload instead of
    the normal boot flow. It must specify the entry point address of the EL3
    payload. Please refer to the "Booting an EL3 payload" section for more
    details.
-
--  ``ENABLE_AMU``: Boolean option to enable Activity Monitor Unit extensions.
-   This is an optional architectural feature available on v8.4 onwards. Some
-   v8.2 implementations also implement an AMU and this option can be used to
-   enable this feature on those systems as well. Default is 0.
 
 -  ``ENABLE_AMU_AUXILIARY_COUNTERS``: Enables support for AMU auxiliary counters
    (also known as group 1 counters). These are implementation-defined counters,
@@ -255,13 +256,12 @@ Common build options
    builds, but this behaviour can be overridden in each platform's Makefile or
    in the build command line.
 
--  ``ENABLE_FEAT_AMUv1``: Numeric value to enable access to the HAFGRTR_EL2
-   (Hypervisor Activity Monitors Fine-Grained Read Trap Register) during EL2
-   to EL3 context save/restore operations. This flag can take the values 0 to 2,
-   to align with the ``FEATURE_DETECTION`` mechanism. It is an optional feature
-   available on v8.4 and onwards and must be set to either 1 or 2 alongside
-   ``ENABLE_FEAT_FGT``, to access the HAFGRTR_EL2 register.
-   Default value is ``0``.
+-  ``ENABLE_FEAT_AMU``: Numeric value to enable Activity Monitor Unit
+   extensions. This flag can take the values 0 to 2, to align with the
+   ``FEATURE_DETECTION`` mechanism. This is an optional architectural feature
+   available on v8.4 onwards. Some v8.2 implementations also implement an AMU
+   and this option can be used to enable this feature on those systems as well.
+   This flag can take the values 0 to 2, the default is 0.
 
 -  ``ENABLE_FEAT_AMUv1p1``: Numeric value to enable the ``FEAT_AMUv1p1``
    extension. ``FEAT_AMUv1p1`` is an optional feature available on Arm v8.6
@@ -321,12 +321,11 @@ Common build options
    Default value is ``0``. ``FEAT_RNG_TRAP`` is an optional feature from
    Armv8.5 onwards.
 
--  ``ENABLE_FEAT_SB``: Numeric value to enable the ``FEAT_SB`` (Speculation
-   Barrier) extension allowing access to ``sb`` instruction. ``FEAT_SB`` is an
-   optional feature and defaults to ``0`` for pre-Armv8.5 CPUs but are mandatory
-   for Armv8.5 or later CPUs. This flag can take values 0 to 2, to align with
-   ``FEATURE_DETECTION`` mechanism. It is enabled from v8.5 and upwards and if
-   needed could be overidden from platforms explicitly. Default value is ``0``.
+-  ``ENABLE_FEAT_SB``: Boolean option to let the TF-A code use the ``FEAT_SB``
+   (Speculation Barrier) instruction ``FEAT_SB`` is an optional feature and
+   defaults to ``0`` for pre-Armv8.5 CPUs, but is mandatory for Armv8.5 or
+   later CPUs. It is enabled from v8.5 and upwards and if needed can be
+   overidden from platforms explicitly.
 
 -  ``ENABLE_FEAT_SEL2``: Numeric value to enable the ``FEAT_SEL2`` (Secure EL2)
    extension. ``FEAT_SEL2`` is a mandatory feature available on Arm v8.4.
@@ -346,6 +345,39 @@ Common build options
    during EL2 context save/restore operations.``FEAT_VHE`` is a mandatory
    architectural feature and is enabled from v8.1 and upwards. It can take
    values 0 to 2, to align  with the ``FEATURE_DETECTION`` mechanism.
+   Default value is ``0``.
+
+-  ``ENABLE_FEAT_TCR2``: Numeric value to set the bit SCR_EL3.ENTCR2 in EL3 to
+   allow access to TCR2_EL2 (extended translation control) from EL2 as
+   well as adding TCR2_EL2 to the EL2 context save/restore operations. Its a
+   mandatory architectural feature and is enabled from v8.9 and upwards. This
+   flag can take the values 0 to 2, to align  with the ``FEATURE_DETECTION``
+   mechanism. Default value is ``0``.
+
+-  ``ENABLE_FEAT_S2PIE``: Numeric value to enable support for FEAT_S2PIE
+   at EL2 and below, and context switch relevant registers.  This flag
+   can take the values 0 to 2, to align  with the ``FEATURE_DETECTION``
+   mechanism. Default value is ``0``.
+
+-  ``ENABLE_FEAT_S1PIE``: Numeric value to enable support for FEAT_S1PIE
+   at EL2 and below, and context switch relevant registers.  This flag
+   can take the values 0 to 2, to align  with the ``FEATURE_DETECTION``
+   mechanism. Default value is ``0``.
+
+-  ``ENABLE_FEAT_S2POE``: Numeric value to enable support for FEAT_S2POE
+   at EL2 and below, and context switch relevant registers.  This flag
+   can take the values 0 to 2, to align  with the ``FEATURE_DETECTION``
+   mechanism. Default value is ``0``.
+
+-  ``ENABLE_FEAT_S1POE``: Numeric value to enable support for FEAT_S1POE
+   at EL2 and below, and context switch relevant registers.  This flag
+   can take the values 0 to 2, to align  with the ``FEATURE_DETECTION``
+   mechanism. Default value is ``0``.
+
+-  ``ENABLE_FEAT_GCS``: Numeric value to set the bit SCR_EL3.GCSEn in EL3 to
+   allow use of Guarded Control Stack from EL2 as well as adding the GCS
+   registers to the EL2 context save/restore operations. This flag can take
+   the values 0 to 2, to align  with the ``FEATURE_DETECTION`` mechanism.
    Default value is ``0``.
 
 -  ``ENABLE_LTO``: Boolean option to enable Link Time Optimization (LTO)
@@ -377,8 +409,8 @@ Common build options
 
 -  ``ENABLE_PIE``: Boolean option to enable Position Independent Executable(PIE)
    support within generic code in TF-A. This option is currently only supported
-   in BL2_AT_EL3, BL31, and BL32 (TSP) for AARCH64 binaries, and in BL32
-   (SP_min) for AARCH32. Default is 0.
+   in BL2, BL31, and BL32 (TSP) for AARCH64 binaries, and
+   in BL32 (SP_min) for AARCH32. Default is 0.
 
 -  ``ENABLE_PMF``: Boolean option to enable support for optional Performance
    Measurement Framework(PMF). Default is 0.
@@ -400,27 +432,36 @@ Common build options
    instrumented. Enabling this option enables the ``ENABLE_PMF`` build option
    as well. Default is 0.
 
--  ``ENABLE_SME_FOR_NS``: Boolean option to enable Scalable Matrix Extension
+-  ``ENABLE_SME_FOR_NS``: Numeric value to enable Scalable Matrix Extension
    (SME), SVE, and FPU/SIMD for the non-secure world only. These features share
    registers so are enabled together. Using this option without
    ENABLE_SME_FOR_SWD=1 will cause SME, SVE, and FPU/SIMD instructions in secure
-   world to trap to EL3. SME is an optional architectural feature for AArch64
+   world to trap to EL3. Requires ``ENABLE_SVE_FOR_NS`` to be set as SME is a
+   superset of SVE. SME is an optional architectural feature for AArch64
    and TF-A support is experimental. At this time, this build option cannot be
    used on systems that have SPD=spmd/SPM_MM or ENABLE_RME, and attempting to
-   build with these options will fail. Default is 0.
+   build with these options will fail. This flag can take the values 0 to 2, to
+   align with the ``FEATURE_DETECTION`` mechanism. Default is 0.
+
+-  ``ENABLE_SME2_FOR_NS``: Numeric value to enable Scalable Matrix Extension
+   version 2 (SME2) for the non-secure world only. SME2 is an optional
+   architectural feature for AArch64 and TF-A support is experimental.
+   This should be set along with ENABLE_SME_FOR_NS=1, if not, the default SME
+   accesses will still be trapped. This flag can take the values 0 to 2, to
+   align with the ``FEATURE_DETECTION`` mechanism. Default is 0.
 
 -  ``ENABLE_SME_FOR_SWD``: Boolean option to enable the Scalable Matrix
-   Extension for secure world use along with SVE and FPU/SIMD, ENABLE_SME_FOR_NS
-   must also be set to use this. If enabling this, the secure world MUST
-   handle context switching for SME, SVE, and FPU/SIMD registers to ensure that
-   no data is leaked to non-secure world. This is experimental. Default is 0.
+   Extension for secure world. Used along with SVE and FPU/SIMD.
+   ENABLE_SME_FOR_NS and ENABLE_SVE_FOR_SWD must also be set to use this.
+   This is experimental. Default is 0.
 
--  ``ENABLE_SPE_FOR_LOWER_ELS`` : Boolean option to enable Statistical Profiling
+-  ``ENABLE_SPE_FOR_NS`` : Numeric value to enable Statistical Profiling
    extensions. This is an optional architectural feature for AArch64.
-   The default is 1 but is automatically disabled when the target architecture
-   is AArch32.
+   This flag can take the values 0 to 2, to align with the ``FEATURE_DETECTION``
+   mechanism. The default is 2 but is automatically disabled when the target
+   architecture is AArch32.
 
--  ``ENABLE_SVE_FOR_NS``: Boolean option to enable Scalable Vector Extension
+-  ``ENABLE_SVE_FOR_NS``: Numeric value to enable Scalable Vector Extension
    (SVE) for the Non-secure world only. SVE is an optional architectural feature
    for AArch64. Note that when SVE is enabled for the Non-secure world, access
    to SIMD and floating-point functionality from the Secure world is disabled by
@@ -428,15 +469,15 @@ Common build options
    This is to avoid corruption of the Non-secure world data in the Z-registers
    which are aliased by the SIMD and FP registers. The build option is not
    compatible with the ``CTX_INCLUDE_FPREGS`` build option, and will raise an
-   assert on platforms where SVE is implemented and ``ENABLE_SVE_FOR_NS`` set to
-   1. The default is 1 but is automatically disabled when ENABLE_SME_FOR_NS=1
-   since SME encompasses SVE. At this time, this build option cannot be used on
-   systems that have SPM_MM enabled.
+   assert on platforms where SVE is implemented and ``ENABLE_SVE_FOR_NS``
+   enabled.  This flag can take the values 0 to 2, to align with the
+   ``FEATURE_DETECTION`` mechanism. At this time, this build option cannot be
+   used on systems that have SPM_MM enabled. The default is 1.
 
 -  ``ENABLE_SVE_FOR_SWD``: Boolean option to enable SVE for the Secure world.
    SVE is an optional architectural feature for AArch64. Note that this option
-   requires ENABLE_SVE_FOR_NS to be enabled. The default is 0 and it
-   is automatically disabled when the target architecture is AArch32.
+   requires ENABLE_SVE_FOR_NS to be enabled. The default is 0 and it is
+   automatically disabled when the target architecture is AArch32.
 
 -  ``ENABLE_STACK_PROTECTOR``: String option to enable the stack protection
    checks in GCC. Allowed values are "all", "strong", "default" and "none". The
@@ -597,6 +638,10 @@ Common build options
    translation library (xlat tables v2) must be used; version 1 of translation
    library is not supported.
 
+-  ``IMPDEF_SYSREG_TRAP``: Numeric value to enable the handling traps for
+   implementation defined system register accesses from lower ELs. Default
+   value is ``0``.
+
 -  ``INVERTED_MEMMAP``: memmap tool print by default lower addresses at the
    bottom, higher addresses at the top. This build flag can be set to '1' to
    invert this behavior. Lower addresses will be printed at the top and higher
@@ -670,7 +715,7 @@ Common build options
    the measurements and recording them as per `PSA DRTM specification`_. For
    platforms which use BL2 to load/authenticate BL31 ``TRUSTED_BOARD_BOOT`` can
    be used and for the platforms which use ``RESET_TO_BL31`` platform owners
-   should have mechanism to authenticate BL31.
+   should have mechanism to authenticate BL31. This is an experimental feature.
 
    This option defaults to 0.
 
@@ -727,24 +772,21 @@ Common build options
    enabled on Arm platforms, the option ``ARM_RECOM_STATE_ID_ENC`` needs to be
    set to 1 as well.
 
--  ``RAS_EXTENSION``: Numeric value to enable Armv8.2 RAS features. RAS features
+-  ``PSCI_OS_INIT_MODE``: Boolean flag to enable support for optional PSCI
+   OS-initiated mode. This option defaults to 0.
+
+-  ``ENABLE_FEAT_RAS``: Numeric value to enable Armv8.2 RAS features. RAS features
    are an optional extension for pre-Armv8.2 CPUs, but are mandatory for Armv8.2
    or later CPUs. This flag can take the values 0 to 2, to align with the
    ``FEATURE_DETECTION`` mechanism.
 
-   When ``RAS_EXTENSION`` is set to ``1``, ``HANDLE_EA_EL3_FIRST_NS`` must also be
-   set to ``1``.
-
-   This option is disabled by default.
+-  ``RAS_FFH_SUPPORT``: Support to enable Firmware first handling of RAS errors
+   originating from NS world. When ``RAS_FFH_SUPPORT`` is set to ``1``,
+   ``HANDLE_EA_EL3_FIRST_NS`` and ``ENABLE_FEAT_RAS`` must also be set to ``1``.
 
 -  ``RESET_TO_BL31``: Enable BL31 entrypoint as the CPU reset vector instead
    of the BL1 entrypoint. It can take the value 0 (CPU reset to BL1
    entrypoint) or 1 (CPU reset to BL31 entrypoint).
-   The default value is 0.
-
--  ``RESET_TO_BL31_WITH_PARAMS``: If ``RESET_TO_BL31`` has been enabled, setting
-   this additional option guarantees that the input registers are not cleared
-   therefore allowing parameters to be passed to the BL31 entrypoint.
    The default value is 0.
 
 -  ``RESET_TO_SP_MIN``: SP_MIN is the minimal AArch32 Secure Payload provided
@@ -823,6 +865,11 @@ Common build options
    component runs at the EL3 exception level. The default value is ``0`` (
    disabled). This configuration supports pre-Armv8.4 platforms (aka not
    implementing the ``FEAT_SEL2`` extension). This is an experimental feature.
+
+-  ``SPMC_OPTEE`` : This boolean option is used jointly with the SPM
+   Dispatcher option (``SPD=spmd``) and with ``SPMD_SPM_AT_SEL2=0`` to
+   indicate that the SPMC at S-EL1 is OP-TEE and an OP-TEE specific loading
+   mechanism should be used.
 
 -  ``SPMD_SPM_AT_SEL2`` : This boolean option is used jointly with the SPM
    Dispatcher option (``SPD=spmd``). When enabled (1) it indicates the SPMC
@@ -955,6 +1002,43 @@ Common build options
    regrouped and put in the root Makefile. This flag can take the values 0 to 3,
    each level enabling more warning options. Default is 0.
 
+   This option is closely related to the ``E`` option, which enables
+   ``-Werror``.
+
+   - ``W=0`` (default)
+
+     Enables a wide assortment of warnings, most notably ``-Wall`` and
+     ``-Wextra``, as well as various bad practices and things that are likely to
+     result in errors. Includes some compiler specific flags. No warnings are
+     expected at this level for any build.
+
+   - ``W=1``
+
+     Enables warnings we want the generic build to include but are too time
+     consuming to fix at the moment. It re-enables warnings taken out for
+     ``W=0`` builds (a few of the ``-Wextra`` additions). This level is expected
+     to eventually be merged into ``W=0``. Some warnings are expected on some
+     builds, but new contributions should not introduce new ones.
+
+   - ``W=2`` (recommended)
+
+    Enables warnings we want the generic build to include but cannot be enabled
+    due to external libraries. This level is expected to eventually be merged
+    into ``W=0``. Lots of warnings are expected, primarily from external
+    libraries like zlib and compiler-rt, but new controbutions should not
+    introduce new ones.
+
+   - ``W=3``
+
+     Enables warnings that are informative but not necessary and generally too
+     verbose and frequently ignored. A very large number of warnings are
+     expected.
+
+   The exact set of warning flags depends on the compiler and TF-A warning
+   level, however they are all succinctly set in the top-level Makefile. Please
+   refer to the `GCC`_ or `Clang`_ documentation for more information on the
+   individual flags.
+
 -  ``WARMBOOT_ENABLE_DCACHE_EARLY`` : Boolean option to enable D-cache early on
    the CPU after warm boot. This is applicable for platforms which do not
    require interconnect programming to enable cache coherency (eg: single
@@ -1023,10 +1107,11 @@ Common build options
   ``FEATURE_DETECTION`` mechanism. The default is 0 and it is automatically
   disabled when the target architecture is AArch32.
 
-- ``ENABLE_SYS_REG_TRACE_FOR_NS``: Boolean option to enable trace system
+- ``ENABLE_SYS_REG_TRACE_FOR_NS``: Numeric value to enable trace system
   registers access from NS ELs, NS-EL2 or NS-EL1 (when NS-EL2 is implemented
   but unused). This feature is available if trace unit such as ETMv4.x, and
-  ETE(extending ETM feature) is implemented. This flag is disabled by default.
+  ETE(extending ETM feature) is implemented. This flag can take the values
+  0 to 2, to align with the ``FEATURE_DETECTION`` mechanism. The default is 0.
 
 - ``ENABLE_TRF_FOR_NS``: Numeric value to enable trace filter control registers
   access from NS ELs, NS-EL2 or NS-EL1 (when NS-EL2 is implemented but unused),
@@ -1043,6 +1128,13 @@ Common build options
   be skipped and non-zero otherwise. By default, this option is disabled which
   means platform hook won't be checked and CMOs will always be performed when
   related functions are called.
+
+- ``ERRATA_ABI_SUPPORT``: Boolean option to enable support for Errata management
+  firmware interface for the BL31 image. By default its disabled (``0``).
+
+- ``ERRATA_NON_ARM_INTERCONNECT``: Boolean option to enable support for the
+  errata mitigation for platforms with a non-arm interconnect using the errata
+  ABI. By default its disabled (``0``).
 
 GICv3 driver options
 --------------------
@@ -1157,8 +1249,10 @@ Firmware update options
 
 --------------
 
-*Copyright (c) 2019-2022, Arm Limited. All rights reserved.*
+*Copyright (c) 2019-2023, Arm Limited. All rights reserved.*
 
 .. _DEN0115: https://developer.arm.com/docs/den0115/latest
 .. _PSA FW update specification: https://developer.arm.com/documentation/den0118/a/
 .. _PSA DRTM specification: https://developer.arm.com/documentation/den0113/a
+.. _GCC: https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html
+.. _Clang: https://clang.llvm.org/docs/DiagnosticsReference.html

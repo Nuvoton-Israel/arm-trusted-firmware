@@ -1,13 +1,13 @@
-# Copyright (c) 2020-2022, Arm Limited and Contributors. All rights reserved.
+# Copyright (c) 2020-2023, Arm Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
-RD_N2_VARIANTS	:= 0 1 2
+RD_N2_VARIANTS	:= 0 1 2 3
 ifneq ($(CSS_SGI_PLATFORM_VARIANT),\
 	$(filter $(CSS_SGI_PLATFORM_VARIANT),$(RD_N2_VARIANTS)))
- $(error "CSS_SGI_PLATFORM_VARIANT for RD-N2 should be 0, 1 or 2, currently set \
-     to ${CSS_SGI_PLATFORM_VARIANT}.")
+ $(error "CSS_SGI_PLATFORM_VARIANT for RD-N2 should be 0, 1, 2 or 3, currently \
+	set to ${CSS_SGI_PLATFORM_VARIANT}.")
 endif
 
 $(eval $(call CREATE_SEQ,SEQ,4))
@@ -87,4 +87,4 @@ NT_FW_CONFIG		:=	${BUILD_PLAT}/fdts/${PLAT}_nt_fw_config.dtb
 $(eval $(call TOOL_ADD_PAYLOAD,${NT_FW_CONFIG},--nt-fw-config))
 
 override CTX_INCLUDE_AARCH32_REGS	:= 0
-override ENABLE_AMU			:= 1
+override ENABLE_FEAT_AMU		:= 1

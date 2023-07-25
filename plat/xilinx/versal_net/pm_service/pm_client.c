@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2022, Xilinx, Inc. All rights reserved.
- * Copyright (C) 2022, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -18,6 +18,7 @@
 #include <lib/mmio.h>
 #include <lib/mmio.h>
 #include <lib/utils.h>
+#include <lib/spinlock.h>
 #include <plat/common/platform.h>
 
 #include <plat_ipi.h>
@@ -29,7 +30,34 @@
 #define UNDEFINED_CPUID		(~0)
 
 DEFINE_RENAME_SYSREG_RW_FUNCS(cpu_pwrctrl_val, S3_0_C15_C2_7)
+
+/*
+ * ARM v8.2, the cache will turn off automatically when cpu
+ * power down. Therefore, there is no doubt to use the spin_lock here.
+ */
+#if !HW_ASSISTED_COHERENCY
 DEFINE_BAKERY_LOCK(pm_client_secure_lock);
+static inline void pm_client_lock_get(void)
+{
+	bakery_lock_get(&pm_client_secure_lock);
+}
+
+static inline void pm_client_lock_release(void)
+{
+	bakery_lock_release(&pm_client_secure_lock);
+}
+#else
+spinlock_t pm_client_secure_lock;
+static inline void pm_client_lock_get(void)
+{
+	spin_lock(&pm_client_secure_lock);
+}
+
+static inline void pm_client_lock_release(void)
+{
+	spin_unlock(&pm_client_secure_lock);
+}
+#endif
 
 static const struct pm_ipi apu_ipi = {
 	.local_ipi_id = IPI_ID_APU,
@@ -140,6 +168,133 @@ const struct pm_proc *pm_get_proc(uint32_t cpuid)
 }
 
 /**
+ * irq_to_pm_node_idx - Get PM node index corresponding to the interrupt number
+ * @irq:        Interrupt number
+ *
+ * Return:      PM node index corresponding to the specified interrupt
+ */
+enum pm_device_node_idx irq_to_pm_node_idx(uint32_t irq)
+{
+	enum pm_device_node_idx dev_idx = XPM_NODEIDX_DEV_MIN;
+
+	assert(irq <= IRQ_MAX);
+
+	switch (irq) {
+	case 20:
+		dev_idx = XPM_NODEIDX_DEV_GPIO;
+		break;
+	case 21:
+		dev_idx = XPM_NODEIDX_DEV_I2C_0;
+		break;
+	case 22:
+		dev_idx = XPM_NODEIDX_DEV_I2C_1;
+		break;
+	case 23:
+		dev_idx = XPM_NODEIDX_DEV_SPI_0;
+		break;
+	case 24:
+		dev_idx = XPM_NODEIDX_DEV_SPI_1;
+		break;
+	case 25:
+		dev_idx = XPM_NODEIDX_DEV_UART_0;
+		break;
+	case 26:
+		dev_idx = XPM_NODEIDX_DEV_UART_1;
+		break;
+	case 27:
+		dev_idx = XPM_NODEIDX_DEV_CAN_FD_0;
+		break;
+	case 28:
+		dev_idx = XPM_NODEIDX_DEV_CAN_FD_1;
+		break;
+	case 29:
+	case 30:
+	case 31:
+	case 32:
+	case 33:
+	case 98:
+		dev_idx = XPM_NODEIDX_DEV_USB_0;
+		break;
+	case 34:
+	case 35:
+	case 36:
+	case 37:
+	case 38:
+	case 99:
+		dev_idx = XPM_NODEIDX_DEV_USB_1;
+		break;
+	case 39:
+	case 40:
+		dev_idx = XPM_NODEIDX_DEV_GEM_0;
+		break;
+	case 41:
+	case 42:
+		dev_idx = XPM_NODEIDX_DEV_GEM_1;
+		break;
+	case 43:
+	case 44:
+	case 45:
+		dev_idx = XPM_NODEIDX_DEV_TTC_0;
+		break;
+	case 46:
+	case 47:
+	case 48:
+		dev_idx = XPM_NODEIDX_DEV_TTC_1;
+		break;
+	case 49:
+	case 50:
+	case 51:
+		dev_idx = XPM_NODEIDX_DEV_TTC_2;
+		break;
+	case 52:
+	case 53:
+	case 54:
+		dev_idx = XPM_NODEIDX_DEV_TTC_3;
+		break;
+	case 72:
+		dev_idx = XPM_NODEIDX_DEV_ADMA_0;
+		break;
+	case 73:
+		dev_idx = XPM_NODEIDX_DEV_ADMA_1;
+		break;
+	case 74:
+		dev_idx = XPM_NODEIDX_DEV_ADMA_2;
+		break;
+	case 75:
+		dev_idx = XPM_NODEIDX_DEV_ADMA_3;
+		break;
+	case 76:
+		dev_idx = XPM_NODEIDX_DEV_ADMA_4;
+		break;
+	case 77:
+		dev_idx = XPM_NODEIDX_DEV_ADMA_5;
+		break;
+	case 78:
+		dev_idx = XPM_NODEIDX_DEV_ADMA_6;
+		break;
+	case 79:
+		dev_idx = XPM_NODEIDX_DEV_ADMA_7;
+		break;
+	case 184:
+	case 185:
+		dev_idx = XPM_NODEIDX_DEV_SDIO_0;
+		break;
+	case 186:
+	case 187:
+		dev_idx = XPM_NODEIDX_DEV_SDIO_1;
+		break;
+	case 200:
+		dev_idx = XPM_NODEIDX_DEV_RTC;
+		break;
+	default:
+		dev_idx = XPM_NODEIDX_DEV_MIN;
+		break;
+	}
+
+	return dev_idx;
+}
+
+/**
  * pm_client_suspend() - Client-specific suspend actions
  *
  * This function should contain any PU-specific actions
@@ -154,9 +309,11 @@ void pm_client_suspend(const struct pm_proc *proc, uint32_t state)
 	uint32_t cpu_id = plat_my_core_pos();
 	uintptr_t val;
 
-	bakery_lock_get(&pm_client_secure_lock);
+	pm_client_lock_get();
 
-	/* TODO: Set wakeup source */
+	if (state == PM_STATE_SUSPEND_TO_RAM) {
+		pm_client_set_wakeup_sources((uint32_t)proc->node_id);
+	}
 
 	val = read_cpu_pwrctrl_val();
 	val |= CORE_PWRDN_EN_BIT_MASK;
@@ -164,10 +321,20 @@ void pm_client_suspend(const struct pm_proc *proc, uint32_t state)
 
 	isb();
 
+	/* Clear power down interrupt status before enabling */
+	mmio_write_32(APU_PCIL_CORE_X_ISR_POWER_REG(cpu_id),
+		      APU_PCIL_CORE_X_ISR_POWER_MASK);
+	/* Enable power down interrupt */
 	mmio_write_32(APU_PCIL_CORE_X_IEN_POWER_REG(cpu_id),
 		      APU_PCIL_CORE_X_IEN_POWER_MASK);
+	/* Clear wakeup interrupt status before enabling */
+	mmio_write_32(APU_PCIL_CORE_X_ISR_WAKE_REG(cpu_id),
+		      APU_PCIL_CORE_X_ISR_WAKE_MASK);
+	/* Enable wake interrupt */
+	mmio_write_32(APU_PCIL_CORE_X_IEN_WAKE_REG(cpu_id),
+		      APU_PCIL_CORE_X_IEN_WAKE_MASK);
 
-	bakery_lock_release(&pm_client_secure_lock);
+	pm_client_lock_release();
 }
 
 /**
@@ -197,16 +364,32 @@ static uint32_t pm_get_cpuid(uint32_t nid)
 void pm_client_wakeup(const struct pm_proc *proc)
 {
 	uint32_t cpuid = pm_get_cpuid(proc->node_id);
+	uintptr_t val;
 
 	if (cpuid == UNDEFINED_CPUID) {
 		return;
 	}
 
-	bakery_lock_get(&pm_client_secure_lock);
+	pm_client_lock_get();
 
-	/* TODO: clear powerdown bit for affected cpu */
+	/* Clear powerdown request */
+	val = read_cpu_pwrctrl_val();
+	val &= ~CORE_PWRDN_EN_BIT_MASK;
+	write_cpu_pwrctrl_val(val);
 
-	bakery_lock_release(&pm_client_secure_lock);
+	isb();
+
+	/* Disabled power down interrupt */
+	mmio_write_32(APU_PCIL_CORE_X_IDS_POWER_REG(cpuid),
+			APU_PCIL_CORE_X_IDS_POWER_MASK);
+	/* Clear wakeup interrupt status before disabling */
+	mmio_write_32(APU_PCIL_CORE_X_ISR_WAKE_REG(cpuid),
+		      APU_PCIL_CORE_X_ISR_WAKE_MASK);
+	/* Disable wake interrupt */
+	mmio_write_32(APU_PCIL_CORE_X_IDS_WAKE_REG(cpuid),
+		      APU_PCIL_CORE_X_IDS_WAKE_MASK);
+
+	pm_client_lock_release();
 }
 
 /**
@@ -223,7 +406,7 @@ void pm_client_abort_suspend(void)
 	/* Enable interrupts at processor level (for current cpu) */
 	gicv3_cpuif_enable(plat_my_core_pos());
 
-	bakery_lock_get(&pm_client_secure_lock);
+	pm_client_lock_get();
 
 	/* Clear powerdown request */
 	val = read_cpu_pwrctrl_val();
@@ -236,5 +419,5 @@ void pm_client_abort_suspend(void)
 	mmio_write_32(APU_PCIL_CORE_X_IDS_POWER_REG(cpu_id),
 			APU_PCIL_CORE_X_IDS_POWER_MASK);
 
-	bakery_lock_release(&pm_client_secure_lock);
+	pm_client_lock_release();
 }

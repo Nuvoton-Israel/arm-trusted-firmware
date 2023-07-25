@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2014-2020, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -135,7 +135,7 @@ static int32_t get_fsbl_estate(const struct xfsbl_partition *partition)
  * @bl33:	BL33 image info structure
  * atf_handoff_addr:  ATF handoff address
  *
- * Process the handoff paramters from the FSBL and populate the BL32 and BL33
+ * Process the handoff parameters from the FSBL and populate the BL32 and BL33
  * image info structures accordingly.
  *
  * Return: Return the status of the handoff. The value will be from the

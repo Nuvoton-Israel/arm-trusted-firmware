@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2018-2023, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -74,13 +74,14 @@ static scmi_channel_plat_info_t plat_rd_scmi_info[] = {
 	#endif
 };
 
-scmi_channel_plat_info_t *plat_css_get_scmi_info(int channel_id)
+scmi_channel_plat_info_t *plat_css_get_scmi_info(unsigned int channel_id)
 {
 	if (sgi_plat_info.platform_id == RD_N1E1_EDGE_SID_VER_PART_NUM ||
 		sgi_plat_info.platform_id == RD_V1_SID_VER_PART_NUM ||
 		sgi_plat_info.platform_id == RD_N2_SID_VER_PART_NUM ||
 		sgi_plat_info.platform_id == RD_V2_SID_VER_PART_NUM ||
-		sgi_plat_info.platform_id == RD_N2_CFG1_SID_VER_PART_NUM) {
+		sgi_plat_info.platform_id == RD_N2_CFG1_SID_VER_PART_NUM ||
+		sgi_plat_info.platform_id == RD_N2_CFG3_SID_VER_PART_NUM) {
 		if (channel_id >= ARRAY_SIZE(plat_rd_scmi_info))
 			panic();
 		return &plat_rd_scmi_info[channel_id];
@@ -105,7 +106,7 @@ void sgi_bl31_common_platform_setup(void)
 {
 	arm_bl31_platform_setup();
 
-#if RAS_EXTENSION
+#if RAS_FFH_SUPPORT
 	sgi_ras_intr_handler_setup();
 #endif
 

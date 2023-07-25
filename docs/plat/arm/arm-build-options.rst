@@ -49,7 +49,7 @@ Arm Platform Build Options
    field of power-state parameter.
 
 -  ``ARM_ROTPK_LOCATION``: used when ``TRUSTED_BOARD_BOOT=1``. It specifies the
-   location of the ROTPK hash returned by the function ``plat_get_rotpk_info()``
+   location of the ROTPK returned by the function ``plat_get_rotpk_info()``
    for Arm platforms. Depending on the selected option, the proper private key
    must be specified using the ``ROT_KEY`` option when building the Trusted
    Firmware. This private key will be used by the certificate generation tool
@@ -68,12 +68,16 @@ Arm Platform Build Options
       ``arm_rotpk_ecdsa.der``, located in ``plat/arm/board/common/rotpk``. To
       use this option, ``arm_rotprivk_ecdsa.pem`` must be specified as
       ``ROT_KEY`` when creating the certificates.
+   -  ``devel_full_dev_rsa_key`` : returns a development public key embedded in
+      the BL1 and BL2 binaries. This key has been obtained from the RSA public
+      key ``arm_rotpk_rsa.der``, located in ``plat/arm/board/common/rotpk``.
 
--  ``ARM_ROTPK_HASH``: used when ``ARM_ROTPK_LOCATION=devel_*``. Specifies the
-   location of the ROTPK hash. Not expected to be a build option. This defaults to
-   ``plat/arm/board/common/rotpk/*_sha256.bin`` depending on the specified algorithm.
-   Providing ``ROT_KEY`` enforces generation of the hash from the ``ROT_KEY`` and
-   overwrites the default hash file.
+-  ``ARM_ROTPK_HASH``: used when ``ARM_ROTPK_LOCATION=devel_*``, excluding
+   ``devel_full_dev_rsa_key``. Specifies the location of the ROTPK hash. Not
+   expected to be a build option. This defaults to
+   ``plat/arm/board/common/rotpk/*_sha256.bin`` depending on the specified
+   algorithm. Providing ``ROT_KEY`` enforces generation of the hash from the
+   ``ROT_KEY`` and overwrites the default hash file.
 
 -  ``ARM_TSP_RAM_LOCATION``: location of the TSP binary. Options:
 
@@ -96,6 +100,14 @@ Arm Platform Build Options
    ``HW_CONFIG`` must include the device tree nodes for the NPU. Currently, only
    the Arm Juno platform has this included in its ``HW_CONFIG`` and the platform
    only loads the ``HW_CONFIG`` in AArch64 builds. Default is 0.
+
+-  ``ARM_ETHOSN_NPU_TZMP1``: boolean option to enable TZMP1 support for the
+   Arm® Ethos™-N NPU. Requires ``ARM_ETHOSN_NPU_DRIVER`` and
+   ``TRUSTED_BOARD_BOOT`` to be enabled.
+
+-  ``ARM_ETHOSN_NPU_FW``: location of the NPU firmware binary
+   (```ethosn.bin```). This firmware image will be included in the FIP and
+   loaded at runtime.
 
 -  ``ARM_SPMC_MANIFEST_DTS`` : path to an alternate manifest file used as the
    SPMC Core manifest. Valid when ``SPD=spmd`` is selected.
@@ -161,4 +173,4 @@ Arm CSS Platform-Specific Build Options
 
 .. |FIP in a GPT image| image:: ../../resources/diagrams/FIP_in_a_GPT_image.png
 
-*Copyright (c) 2019-2021, Arm Limited. All rights reserved.*
+*Copyright (c) 2019-2023, Arm Limited. All rights reserved.*

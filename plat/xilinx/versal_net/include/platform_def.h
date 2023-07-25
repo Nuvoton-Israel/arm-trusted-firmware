@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2018-2020, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2018-2020, Arm Limited and Contributors. All rights reserved.
  * Copyright (c) 2021-2022, Xilinx, Inc. All rights reserved.
- * Copyright (C) 2022, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -95,20 +95,25 @@
 #define CACHE_WRITEBACK_SHIFT	U(6)
 #define CACHE_WRITEBACK_GRANULE	(1 << CACHE_WRITEBACK_SHIFT)
 
-#define PLAT_VERSAL_NET_GICD_BASE	U(0xE2000000)
-#define PLAT_VERSAL_NET_GICR_BASE	U(0xE2060000)
+#define PLAT_GICD_BASE_VALUE	U(0xE2000000)
+#define PLAT_GICR_BASE_VALUE	U(0xE2060000)
 
 /*
  * Define a list of Group 1 Secure and Group 0 interrupts as per GICv3
  * terminology. On a GICv2 system or mode, the lists will be merged and treated
  * as Group 0 interrupts.
  */
-#define PLAT_VERSAL_IPI_IRQ	62
+#define PLAT_VERSAL_NET_IPI_IRQ	89
+#define PLAT_VERSAL_IPI_IRQ	PLAT_VERSAL_NET_IPI_IRQ
 
 #define PLAT_VERSAL_NET_G1S_IRQ_PROPS(grp) \
 	INTR_PROP_DESC(VERSAL_NET_IRQ_SEC_PHY_TIMER, GIC_HIGHEST_SEC_PRIORITY, grp, \
 			GIC_INTR_CFG_LEVEL)
 
-#define PLAT_VERSAL_NET_G0_IRQ_PROPS(grp)
+#define PLAT_VERSAL_NET_G0_IRQ_PROPS(grp) \
+	INTR_PROP_DESC(PLAT_VERSAL_IPI_IRQ, GIC_HIGHEST_SEC_PRIORITY, grp, \
+			GIC_INTR_CFG_EDGE), \
+
+#define IRQ_MAX		200U
 
 #endif /* PLATFORM_DEF_H */

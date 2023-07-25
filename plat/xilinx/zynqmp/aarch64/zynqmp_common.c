@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2013-2022, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2013-2022, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -10,12 +11,15 @@
 #include <common/debug.h>
 #include <drivers/generic_delay_timer.h>
 #include <lib/mmio.h>
+#include <lib/smccc.h>
 #include <lib/xlat_tables/xlat_tables.h>
 #include <plat_ipi.h>
 #include <plat_private.h>
+#include <plat_startup.h>
 #include <plat/common/platform.h>
+#include <services/arm_arch_svc.h>
 
-#include "pm_api_sys.h"
+#include "zynqmp_pm_api_sys.h"
 
 /*
  * Table of regions to map using the MMU.
@@ -215,7 +219,7 @@ static const struct {
 #define ZYNQMP_PL_STATUS_MASK	BIT(ZYNQMP_PL_STATUS_BIT)
 #define ZYNQMP_CSU_VERSION_MASK	~(ZYNQMP_PL_STATUS_MASK)
 
-#define SILICON_ID_XCK24	0x4714093U
+#define SILICON_ID_XCK24	0x4712093U
 #define SILICON_ID_XCK26	0x4724093U
 
 static char *zynqmp_get_silicon_idcode_name(void)
@@ -303,11 +307,36 @@ static char *zynqmp_print_silicon_idcode(void)
 	maskid = ZYNQMP_CSU_IDCODE_XILINX_ID << ZYNQMP_CSU_IDCODE_XILINX_ID_SHIFT |
 		 ZYNQMP_CSU_IDCODE_FAMILY << ZYNQMP_CSU_IDCODE_FAMILY_SHIFT;
 	if (tmp != maskid) {
-		ERROR("Incorrect XILINX IDCODE 0x%x, maskid 0x%x\n", id, maskid);
+		ERROR("Incorrect IDCODE 0x%x, maskid 0x%x\n", id, maskid);
 		return "UNKN";
 	}
-	VERBOSE("Xilinx IDCODE 0x%x\n", id);
+	VERBOSE("IDCODE 0x%x\n", id);
 	return zynqmp_get_silicon_idcode_name();
+}
+
+int32_t plat_is_smccc_feature_available(u_register_t fid)
+{
+	switch (fid) {
+	case SMCCC_ARCH_SOC_ID:
+		return SMC_ARCH_CALL_SUCCESS;
+	default:
+		return SMC_ARCH_CALL_NOT_SUPPORTED;
+	}
+
+	return SMC_ARCH_CALL_NOT_SUPPORTED;
+}
+
+int32_t plat_get_soc_version(void)
+{
+	uint32_t chip_id = zynqmp_get_silicon_ver();
+	uint32_t manfid = SOC_ID_SET_JEP_106(JEDEC_XILINX_BKID, JEDEC_XILINX_MFID);
+
+	return (int32_t)(manfid | (chip_id & 0xFFFF));
+}
+
+int32_t plat_get_soc_revision(void)
+{
+	return mmio_read_32(ZYNQMP_CSU_BASEADDR + ZYNQMP_CSU_IDCODE_OFFSET);
 }
 
 static uint32_t zynqmp_get_ps_ver(void)

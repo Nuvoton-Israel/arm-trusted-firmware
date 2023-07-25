@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2018-2021, Arm Limited and Contributors. All rights reserved.
  * Copyright (c) 2018-2022, Xilinx, Inc. All rights reserved.
  * Copyright (c) 2022, Advanced Micro Devices, Inc. All rights reserved.
  *
@@ -17,7 +17,7 @@
 #include <drivers/arm/pl011.h>
 #include <drivers/console.h>
 #include <lib/mmio.h>
-#include <lib/xlat_tables/xlat_tables.h>
+#include <lib/xlat_tables/xlat_tables_v2.h>
 #include <plat/common/platform.h>
 #include <versal_def.h>
 #include <plat_private.h>
@@ -97,9 +97,6 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 
 	/* Initialize the platform config for future decision making */
 	versal_config_setup();
-	/* There are no parameters from BL2 if BL31 is a reset vector */
-	assert(arg0 == 0U);
-	assert(arg1 == 0U);
 
 	/*
 	 * Do initial security configuration to allow DRAM/device access. On
@@ -135,7 +132,7 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 	} else if (ret != FSBL_HANDOFF_SUCCESS) {
 		panic();
 	} else {
-		INFO("BL31: fsbl-atf handover success %u\n", ret);
+		INFO("BL31: PLM to TF-A handover success %u\n", ret);
 	}
 
 	NOTICE("BL31: Secure code at 0x%lx\n", bl32_image_ep_info.pc);
@@ -232,5 +229,5 @@ void bl31_plat_arch_setup(void)
 	};
 
 	setup_page_tables(bl_regions, plat_versal_get_mmap());
-	enable_mmu_el3(0);
+	enable_mmu(0);
 }

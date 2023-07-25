@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2022, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2015-2023, ARM Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -290,10 +290,7 @@ void bl2_el3_plat_arch_setup(void)
 		panic();
 	}
 
-	stm32_save_boot_interface(boot_context->boot_interface_selected,
-				  boot_context->boot_interface_instance);
-	stm32_save_boot_auth(boot_context->auth_status,
-			     boot_context->boot_partition_used_toboot);
+	stm32_save_boot_info(boot_context);
 
 #if STM32MP_USB_PROGRAMMER && STM32MP15
 	/* Deconfigure all UART RX pins configured by ROM code */
@@ -543,20 +540,15 @@ int bl2_plat_handle_post_image_load(unsigned int image_id)
 
 void bl2_el3_plat_prepare_exit(void)
 {
+#if STM32MP_UART_PROGRAMMER || STM32MP_USB_PROGRAMMER
 	uint16_t boot_itf = stm32mp_get_boot_itf_selected();
 
-	switch (boot_itf) {
-#if STM32MP_UART_PROGRAMMER || STM32MP_USB_PROGRAMMER
-	case BOOT_API_CTX_BOOT_INTERFACE_SEL_SERIAL_UART:
-	case BOOT_API_CTX_BOOT_INTERFACE_SEL_SERIAL_USB:
+	if ((boot_itf == BOOT_API_CTX_BOOT_INTERFACE_SEL_SERIAL_UART) ||
+	    (boot_itf == BOOT_API_CTX_BOOT_INTERFACE_SEL_SERIAL_USB)) {
 		/* Invalidate the downloaded buffer used with io_memmap */
 		inv_dcache_range(DWL_BUFFER_BASE, DWL_BUFFER_SIZE);
-		break;
-#endif /* STM32MP_UART_PROGRAMMER || STM32MP_USB_PROGRAMMER */
-	default:
-		/* Do nothing in default case */
-		break;
 	}
+#endif /* STM32MP_UART_PROGRAMMER || STM32MP_USB_PROGRAMMER */
 
 	stm32mp1_security_setup();
 }

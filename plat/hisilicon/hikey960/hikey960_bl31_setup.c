@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2022, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2017-2023, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -183,7 +183,7 @@ static void hikey960_iomcu_dma_init(void)
 
 #define SPMC_SHARED_MEMORY_OBJ_SIZE (512 * 1024)
 
-__section("ram2_region") uint8_t plat_spmc_shmem_datastore[SPMC_SHARED_MEMORY_OBJ_SIZE];
+__section(".ram2_region") uint8_t plat_spmc_shmem_datastore[SPMC_SHARED_MEMORY_OBJ_SIZE];
 
 int plat_spmc_shmem_datastore_get(uint8_t **datastore, size_t *size)
 {
@@ -244,6 +244,15 @@ static uint64_t hikey_debug_fiq_handler(uint32_t id,
 	panic();
 
 	return 0;
+}
+#elif defined(SPD_spmd) && (SPMC_AT_EL3 == 0)
+/*
+ * A dummy implementation of the platform handler for Group0 secure interrupt.
+ */
+int plat_spmd_handle_group0_interrupt(uint32_t intid)
+{
+	(void)intid;
+	return -1;
 }
 #endif
 
