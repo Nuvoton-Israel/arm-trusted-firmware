@@ -151,11 +151,12 @@ func plat_wait_for_warm_boot
 	 */
 	bl	plat_my_core_pos
 	lsl	x0, x0, #3
-	mov x8, x0
 	mov_imm	x2, PLAT_NPCM_TM_HOLD_BASE
 	add	x0, x0, x2
+	mov x8, x0
 	mov_imm	x2, PLAT_NPCM_TRUSTED_NOTIFICATION_BASE
 	add	x8, x8, x2
+
 	/*
 	 * This code runs way before requesting the warmboot of this core,
 	 * so it is possible to clear the mailbox before getting a request
