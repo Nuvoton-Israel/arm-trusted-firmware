@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, Arm Limited. All rights reserved.
+ * Copyright (c) 2019-2024, Arm Limited. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -89,12 +89,10 @@ static inline bool is_armv8_5_bti_present(void)
 		ID_AA64PFR1_EL1_BT_MASK) == BTI_IMPLEMENTED;
 }
 
-static inline unsigned int get_armv8_5_mte_support(void)
-{
-	return ((read_id_aa64pfr1_el1() >> ID_AA64PFR1_EL1_MTE_SHIFT) &
-		ID_AA64PFR1_EL1_MTE_MASK);
-}
-
+CREATE_FEATURE_FUNCS(feat_mte, id_aa64pfr1_el1, ID_AA64PFR1_EL1_MTE_SHIFT,
+		     ENABLE_FEAT_MTE)
+CREATE_FEATURE_FUNCS_VER(feat_mte2, read_feat_mte_id_field, MTE_IMPLEMENTED_ELX,
+		     ENABLE_FEAT_MTE2)
 CREATE_FEATURE_FUNCS(feat_sel2, id_aa64pfr0_el1, ID_AA64PFR0_SEL2_SHIFT,
 		     ENABLE_FEAT_SEL2)
 CREATE_FEATURE_FUNCS(feat_twed, id_aa64mmfr1_el1, ID_AA64MMFR1_EL1_TWED_SHIFT,
@@ -191,10 +189,28 @@ static inline unsigned int read_feat_sb_id_field(void)
 	return ISOLATE_FIELD(read_id_aa64isar1_el1(), ID_AA64ISAR1_SB_SHIFT);
 }
 
-/* FEAT_CSV2_2: Cache Speculation Variant 2 */
-CREATE_FEATURE_FUNCS(feat_csv2, id_aa64pfr0_el1, ID_AA64PFR0_CSV2_SHIFT, 0)
+/*
+ * FEAT_CSV2: Cache Speculation Variant 2. This checks bit fields[56-59]
+ * of id_aa64pfr0_el1 register and can be used to check for below features:
+ * FEAT_CSV2_2: Cache Speculation Variant CSV2_2.
+ * FEAT_CSV2_3: Cache Speculation Variant CSV2_3.
+ * 0b0000 - Feature FEAT_CSV2 is not implemented.
+ * 0b0001 - Feature FEAT_CSV2 is implemented, but FEAT_CSV2_2 and FEAT_CSV2_3
+ *          are not implemented.
+ * 0b0010 - Feature FEAT_CSV2_2 is implemented but FEAT_CSV2_3 is not
+ *          implemented.
+ * 0b0011 - Feature FEAT_CSV2_3 is implemented.
+ */
+static inline unsigned int read_feat_csv2_id_field(void)
+{
+	return (unsigned int)(read_id_aa64pfr0_el1() >>
+		ID_AA64PFR0_CSV2_SHIFT) & ID_AA64PFR0_CSV2_MASK;
+}
+
 CREATE_FEATURE_FUNCS_VER(feat_csv2_2, read_feat_csv2_id_field,
 			 ID_AA64PFR0_CSV2_2_SUPPORTED, ENABLE_FEAT_CSV2_2)
+CREATE_FEATURE_FUNCS_VER(feat_csv2_3, read_feat_csv2_id_field,
+			 ID_AA64PFR0_CSV2_3_SUPPORTED, ENABLE_FEAT_CSV2_3)
 
 /* FEAT_SPE: Statistical Profiling Extension */
 CREATE_FEATURE_FUNCS(feat_spe, id_aa64dfr0_el1, ID_AA64DFR0_PMS_SHIFT,

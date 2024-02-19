@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, Arm Limited. All rights reserved.
+ * Copyright (c) 2019-2024, Arm Limited. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -137,6 +137,7 @@ static inline bool is_feat_twed_supported(void) { return false; }
 static inline bool is_feat_ecv_supported(void) { return false; }
 static inline bool is_feat_ecv_v2_supported(void) { return false; }
 static inline bool is_feat_csv2_2_supported(void) { return false; }
+static inline bool is_feat_csv2_3_supported(void) { return false; }
 static inline bool is_feat_ras_supported(void) { return false; }
 
 /* The following features are supported in AArch64 only. */
@@ -147,6 +148,8 @@ static inline bool is_feat_tcr2_supported(void) { return false; }
 static inline bool is_feat_spe_supported(void) { return false; }
 static inline bool is_feat_rng_supported(void) { return false; }
 static inline bool is_feat_gcs_supported(void) { return false; }
+static inline bool is_feat_mte_supported(void) { return false; }
+static inline bool is_feat_mte2_supported(void) { return false; }
 static inline bool is_feat_mpam_supported(void) { return false; }
 static inline bool is_feat_hcx_supported(void) { return false; }
 static inline bool is_feat_sve_supported(void) { return false; }

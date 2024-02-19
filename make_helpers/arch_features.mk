@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023, Arm Limited. All rights reserved.
+# Copyright (c) 2022-2024, Arm Limited. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -8,65 +8,129 @@
 # and enables them based on the configured architecture version.
 
 # This file follows the following format:
-#   - Enable mandatory feature if applicable to an Arch Version.
+#   - Enable mandatory feature if not updated, as applicable to an Arch Version.
 #   - By default disable any mandatory features if they have not been defined yet.
 #   - Disable or enable any optional feature this would be enabled/disabled if needed by platform.
 
 #
 ################################################################################
-# Enable Mandatory features based on Arch versions.
+# Enable Mandatory features if not updated yet, based on Arch versions.
 ################################################################################
 #
 
 # Enable the features which are mandatory from ARCH version 8.1 and upwards.
 ifeq "8.1" "$(word 1, $(sort 8.1 $(ARM_ARCH_MAJOR).$(ARM_ARCH_MINOR)))"
-ENABLE_FEAT_PAN				:=	1
-ENABLE_FEAT_VHE				:=	1
+armv8-1-a-feats         := ENABLE_FEAT_PAN ENABLE_FEAT_VHE
+
+FEAT_LIST               := ${armv8-1-a-feats}
 endif
 
 # Enable the features which are mandatory from ARCH version 8.2 and upwards.
 ifeq "8.2" "$(word 1, $(sort 8.2 $(ARM_ARCH_MAJOR).$(ARM_ARCH_MINOR)))"
-ENABLE_FEAT_RAS				:=	1
+armv8-2-a-feats         := ENABLE_FEAT_RAS
+# 8.1 Compliant
+armv8-2-a-feats         += ${armv8-1-a-feats}
+
+FEAT_LIST               := ${armv8-2-a-feats}
+endif
+
+# Enable the features which are mandatory from ARCH version 8.3 and upwards.
+ifeq "8.3" "$(word 1, $(sort 8.3 $(ARM_ARCH_MAJOR).$(ARM_ARCH_MINOR)))"
+# 8.2 Compliant
+armv8-3-a-feats         += ${armv8-2-a-feats}
+
+FEAT_LIST               := ${armv8-3-a-feats}
 endif
 
 # Enable the features which are mandatory from ARCH version 8.4 and upwards.
 ifeq "8.4" "$(word 1, $(sort 8.4 $(ARM_ARCH_MAJOR).$(ARM_ARCH_MINOR)))"
-ENABLE_FEAT_SEL2			:=	1
-ENABLE_TRF_FOR_NS			:=	1
-ENABLE_FEAT_DIT				:=	1
+armv8-4-a-feats         := ENABLE_FEAT_SEL2 ENABLE_TRF_FOR_NS ENABLE_FEAT_DIT
+# 8.3 Compliant
+armv8-4-a-feats         += ${armv8-3-a-feats}
+
+FEAT_LIST               := ${armv8-4-a-feats}
 endif
 
 # Enable the features which are mandatory from ARCH version 8.5 and upwards.
 ifeq "8.5" "$(word 1, $(sort 8.5 $(ARM_ARCH_MAJOR).$(ARM_ARCH_MINOR)))"
-ENABLE_FEAT_RNG				:=	1
-ENABLE_FEAT_SB				:=	1
+armv8-5-a-feats         := ENABLE_FEAT_RNG ENABLE_FEAT_SB
+# 8.4 Compliant
+armv8-5-a-feats         += ${armv8-4-a-feats}
 
+FEAT_LIST               := ${armv8-5-a-feats}
 # Enable Memory tagging, Branch Target Identification for aarch64 only.
 ifeq ($(ARCH), aarch64)
-	mem_tag_arch_support		:= 	yes
+	mem_tag_arch_support		?= 	yes
 endif #(ARCH=aarch64)
 
 endif
 
 # Enable the features which are mandatory from ARCH version 8.6 and upwards.
 ifeq "8.6" "$(word 1, $(sort 8.6 $(ARM_ARCH_MAJOR).$(ARM_ARCH_MINOR)))"
-ENABLE_FEAT_ECV				:=	1
-ENABLE_FEAT_FGT				:=	1
+armv8-6-a-feats         := ENABLE_FEAT_ECV ENABLE_FEAT_FGT
+# 8.5 Compliant
+armv8-6-a-feats         += ${armv8-5-a-feats}
+FEAT_LIST               := ${armv8-6-a-feats}
 endif
 
 # Enable the features which are mandatory from ARCH version 8.7 and upwards.
 ifeq "8.7" "$(word 1, $(sort 8.7 $(ARM_ARCH_MAJOR).$(ARM_ARCH_MINOR)))"
-ENABLE_FEAT_HCX				:=	1
+armv8-7-a-feats         := ENABLE_FEAT_HCX
+# 8.6 Compliant
+armv8-7-a-feats         += ${armv8-6-a-feats}
+FEAT_LIST               := ${armv8-7-a-feats}
+endif
+
+# Enable the features which are mandatory from ARCH version 8.8 and upwards.
+ifeq "8.8" "$(word 1, $(sort 8.8 $(ARM_ARCH_MAJOR).$(ARM_ARCH_MINOR)))"
+# 8.7 Compliant
+armv8-7-a-feats         += ${armv8-7-a-feats}
+FEAT_LIST               := ${armv8-8-a-feats}
 endif
 
 # Enable the features which are mandatory from ARCH version 8.9 and upwards.
 ifeq "8.9" "$(word 1, $(sort 8.9 $(ARM_ARCH_MAJOR).$(ARM_ARCH_MINOR)))"
-ENABLE_FEAT_TCR2			:=	1
+armv8-9-a-feats         := ENABLE_FEAT_TCR2
+# 8.8 Compliant
+armv8-9-a-feats         += ${armv8-8-a-feats}
+FEAT_LIST               := ${armv8-9-a-feats}
 endif
+
+# Enable the features which are mandatory from ARCH version 9.0 and upwards.
+ifeq "9.0" "$(word 1, $(sort 9.0 $(ARM_ARCH_MAJOR).$(ARM_ARCH_MINOR)))"
+# 8.5 Compliant
+armv9-0-a-feats         += ${armv8-5-a-feats}
+FEAT_LIST               := ${armv9-0-a-feats}
+endif
+
+# Enable the features which are mandatory from ARCH version 9.1 and upwards.
+ifeq "9.1" "$(word 1, $(sort 9.1 $(ARM_ARCH_MAJOR).$(ARM_ARCH_MINOR)))"
+# 8.6 and 9.0 Compliant
+armv9-1-a-feats         += ${armv8-6-a-feats} ${armv9-0-a-feats}
+FEAT_LIST               := ${armv9-1-a-feats}
+endif
+
+# Enable the features which are mandatory from ARCH version 9.2 and upwards.
+ifeq "9.2" "$(word 1, $(sort 9.2 $(ARM_ARCH_MAJOR).$(ARM_ARCH_MINOR)))"
+# 8.7 and 9.1 Compliant
+armv9-2-a-feats         += ${armv8-7-a-feats} ${armv9-1-a-feats}
+FEAT_LIST               := ${armv9-2-a-feats}
+endif
+
+# Enable the features which are mandatory from ARCH version 9.3 and upwards.
+ifeq "9.3" "$(word 1, $(sort 9.3 $(ARM_ARCH_MAJOR).$(ARM_ARCH_MINOR)))"
+# 8.8 and 9.2 Compliant
+armv9-3-a-feats         += ${armv8-8-a-feats} ${armv9-2-a-feats}
+FEAT_LIST               := ${armv9-3-a-feats}
+endif
+
+# Set all FEAT_* in FEAT_LIST to '1' if they are not yet defined or set
+# from build commandline options or platform makefile.
+$(eval $(call default_ones, ${sort ${FEAT_LIST}}))
 
 #
 ################################################################################
-# Set mandatory features by default to zero.
+# Set mandatory features by default to zero, if they are not already updated.
 ################################################################################
 #
 
@@ -169,6 +233,10 @@ ENABLE_FEAT_TCR2		?=	0
 # Flag to enable CSV2_2 extension.
 ENABLE_FEAT_CSV2_2			?=	0
 
+# Flag to enable CSV2_3 extension. FEAT_CSV2_3 enables access to the
+# SCXTNUM_ELx register.
+ENABLE_FEAT_CSV2_3			?=	0
+
 # By default, disable access of trace system registers from NS lower
 # ELs  i.e. NS-EL2, or NS-EL1 if NS-EL2 implemented but unused if
 # system register trace is implemented. This feature is available if
@@ -239,10 +307,27 @@ CTX_INCLUDE_NEVE_REGS			?=	0
 # registers, by setting SCR_EL3.TRNDR.
 ENABLE_FEAT_RNG_TRAP			?=	0
 
-# Include Memory Tagging Extension registers in cpu context. This must be set
-# to 1 if the platform wants to use this feature in the Secure world and MTE is
-# enabled at ELX.
-CTX_INCLUDE_MTE_REGS			?=	0
+# Enable Memory Tagging Extension. This must be set to 1 if the platform wants
+# to use this feature in the Secure world and MTE is enabled at ELX.
+ifeq ($(CTX_INCLUDE_MTE_REGS),1)
+        $(warning CTX_INCLUDE_MTE_REGS option is deprecated use ENABLE_FEAT_MTE, Enabling ENABLE_FEAT_MTE)
+        ENABLE_FEAT_MTE                 ?=      1
+endif
+ifeq (${ARCH},aarch32)
+        ifneq ($(or $(ENABLE_FEAT_MTE),0),0)
+                $(error ENABLE_FEAT_MTE is not supported for AArch32)
+        endif
+endif
+ENABLE_FEAT_MTE		                ?=	0
+ENABLE_FEAT_MTE2		        ?=	0
+
+
+# Add a error message to indicate incorrect MTE2 selection without MTE enabled.
+ifneq ($(ENABLE_FEAT_MTE2),0)
+        ifeq ($(ENABLE_FEAT_MTE),0)
+               $(error ENABLE_FEAT_MTE2 is not supported without enabling ENABLE_FEAT_MTE)
+        endif
+endif
 
 #----
 # 8.6
@@ -286,9 +371,6 @@ ENABLE_FEAT_S1POE			?=	0
 # 9.0
 #----
 
-# Flag to enable Realm Management Extension (FEAT_RME).
-ENABLE_RME				?=	0
-
 # Scalable Matrix Extension for non-secure world.
 ENABLE_SME_FOR_NS			?=	0
 
@@ -313,6 +395,9 @@ endif
 #----
 # 9.2
 #----
+
+# Flag to enable Realm Management Extension (FEAT_RME).
+ENABLE_RME				?=	0
 
 # Scalable Matrix Extension version 2 for non-secure world.
 ENABLE_SME2_FOR_NS			?=	0

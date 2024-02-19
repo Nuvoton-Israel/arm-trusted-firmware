@@ -2767,13 +2767,9 @@ Armv8.5-A
 -  Branch Target Identification feature is selected by ``BRANCH_PROTECTION``
    option set to 1. This option defaults to 0.
 
--  Memory Tagging Extension feature is unconditionally enabled for both worlds
-   (at EL0 and S-EL0) if it is only supported at EL0. If instead it is
-   implemented at all ELs, it is unconditionally enabled for only the normal
-   world. To enable it for the secure world as well, the build option
-   ``CTX_INCLUDE_MTE_REGS`` is required. If the hardware does not implement
-   MTE support at all, it is always disabled, no matter what build options
-   are used.
+-  Memory Tagging Extension feature is unconditionally enabled for both worlds.
+   To enable MTE at EL0 use ``ENABLE_FEAT_MTE`` is required and to enable MTE at
+   ELX ``ENABLE_FEAT_MTE2`` is required.
 
 Armv7-A
 ~~~~~~~
@@ -2860,13 +2856,13 @@ kernel at boot time. These can be found in the ``fdts`` directory.
 
 --------------
 
-*Copyright (c) 2013-2023, Arm Limited and Contributors. All rights reserved.*
+*Copyright (c) 2013-2024, Arm Limited and Contributors. All rights reserved.*
 
 .. _SMCCC: https://developer.arm.com/docs/den0028/latest
 .. _PSCI: https://developer.arm.com/documentation/den0022/latest/
 .. _Arm ARM: https://developer.arm.com/docs/ddi0487/latest
 .. _SMC Calling Convention: https://developer.arm.com/docs/den0028/latest
-.. _Trusted Board Boot Requirements CLIENT (TBBR-CLIENT) Armv8-A (ARM DEN0006D): https://developer.arm.com/docs/den0006/latest/trusted-board-boot-requirements-client-tbbr-client-armv8-a
+.. _Trusted Board Boot Requirements CLIENT (TBBR-CLIENT) Armv8-A (ARM DEN0006D): https://developer.arm.com/docs/den0006/latest
 .. _Arm Confidential Compute Architecture (Arm CCA): https://www.arm.com/why-arm/architecture/security-features/arm-confidential-compute-architecture
 .. _AArch64 exception vector table: https://developer.arm.com/documentation/100933/0100/AArch64-exception-vector-table
 

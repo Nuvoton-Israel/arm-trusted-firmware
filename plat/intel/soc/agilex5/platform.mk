@@ -60,6 +60,7 @@ BL2_SOURCES		+=	\
 		plat/intel/soc/agilex5/soc/agilex5_power_manager.c	\
 		plat/intel/soc/common/bl2_plat_mem_params_desc.c	\
 		plat/intel/soc/common/socfpga_image_load.c		\
+		plat/intel/soc/common/socfpga_ros.c			\
 		plat/intel/soc/common/socfpga_storage.c			\
 		plat/intel/soc/common/socfpga_vab.c				\
 		plat/intel/soc/common/soc/socfpga_emac.c		\
@@ -100,6 +101,10 @@ USE_COHERENT_MEM := 0
 CTX_INCLUDE_AARCH32_REGS := 0
 ERRATA_A55_1530923 := 1
 
+# Don't have the Linux kernel as a BL33 image by default
+ARM_LINUX_KERNEL_AS_BL33	:=	0
+$(eval $(call assert_boolean,ARM_LINUX_KERNEL_AS_BL33))
+$(eval $(call add_define,ARM_LINUX_KERNEL_AS_BL33))
 $(eval $(call add_define,ARM_PRELOADED_DTB_BASE))
 
 PROGRAMMABLE_RESET_ADDRESS	:= 0

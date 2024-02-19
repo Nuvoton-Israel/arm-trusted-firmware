@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2013-2023, Arm Limited and Contributors. All rights reserved.
+# Copyright (c) 2013-2024, Arm Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -9,7 +9,8 @@
 #
 VERSION_MAJOR			:= 2
 VERSION_MINOR			:= 10
-VERSION_PATCH			:= 0	# Only used for LTS releases
+# VERSION_PATCH is only used for LTS releases
+VERSION_PATCH			:= 0
 VERSION				:= ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
 
 # Default goal is build all images
@@ -100,14 +101,12 @@ HOSTCC			:=	gcc
 export HOSTCC
 
 CC			:=	${CROSS_COMPILE}gcc
-CPP			:=	${CROSS_COMPILE}cpp
+CPP			:=	${CROSS_COMPILE}gcc -E
 AS			:=	${CROSS_COMPILE}gcc
-AR			:=	${CROSS_COMPILE}ar
+AR			:=	${CROSS_COMPILE}gcc-ar
 LINKER			:=	${CROSS_COMPILE}ld
 OC			:=	${CROSS_COMPILE}objcopy
 OD			:=	${CROSS_COMPILE}objdump
-NM			:=	${CROSS_COMPILE}nm
-PP			:=	${CROSS_COMPILE}gcc -E
 DTC			:=	dtc
 
 # Use ${LD}.bfd instead if it exists (as absolute path or together with $PATH).
@@ -162,15 +161,6 @@ endif #(ARM_ARCH_MAJOR)
 ################################################################################
 arch-features		=	${ARM_ARCH_FEATURE}
 
-# Set the compiler's architecture feature modifiers
-ifneq ($(arch-features), none)
-	# Strip "none+" from arch-features
-	arch-features	:=	$(subst none+,,$(arch-features))
-	march-directive	:=	$(march-directive)+$(arch-features)
-# Print features
-        $(info Arm Architecture Features specified: $(subst +, ,$(arch-features)))
-endif #(arch-features)
-
 ifneq ($(findstring clang,$(notdir $(CC))),)
 	ifneq ($(findstring armclang,$(notdir $(CC))),)
 		TF_CFLAGS_aarch32	:=	-target arm-arm-none-eabi
@@ -187,7 +177,6 @@ ifneq ($(findstring clang,$(notdir $(CC))),)
 	endif
 
 	CPP		:=	$(CC) -E $(TF_CFLAGS_$(ARCH))
-	PP		:=	$(CC) -E $(TF_CFLAGS_$(ARCH))
 	AS		:=	$(CC) -c -x assembler-with-cpp $(TF_CFLAGS_$(ARCH))
 else ifneq ($(findstring gcc,$(notdir $(CC))),)
 	ifeq ($(ENABLE_LTO),1)
@@ -234,8 +223,6 @@ endif #(AARCH32_INSTRUCTION_SET)
 
 TF_CFLAGS_aarch32	+=	-mno-unaligned-access
 TF_CFLAGS_aarch64	+=	-mgeneral-regs-only -mstrict-align
-
-ASFLAGS		+=	$(march-directive)
 
 ##############################################################################
 # WARNINGS Configuration
@@ -356,6 +343,7 @@ ifneq ($(findstring armlink,$(notdir $(LD))),)
 # LD = gcc (used when GCC LTO is enabled)
 else ifneq ($(findstring gcc,$(notdir $(LD))),)
 	# Pass ld options with Wl or Xlinker switches
+	TF_LDFLAGS		+=	$(call ld_option,-Xlinker --no-warn-rwx-segments)
 	TF_LDFLAGS		+=	-Wl,--fatal-warnings -O1
 	TF_LDFLAGS		+=	-Wl,--gc-sections
 
@@ -693,6 +681,7 @@ endif
 include ${MAKE_HELPERS_DIRECTORY}march.mk
 
 TF_CFLAGS   +=	$(march-directive)
+ASFLAGS		+=	$(march-directive)
 
 # This internal flag is common option which is set to 1 for scenarios
 # when the BL2 is running in EL3 level. This occurs in two scenarios -
@@ -935,12 +924,6 @@ ifeq ($(CTX_INCLUDE_PAUTH_REGS),1)
 	endif
 endif #(CTX_INCLUDE_PAUTH_REGS)
 
-ifeq ($(CTX_INCLUDE_MTE_REGS),1)
-	ifneq (${ARCH},aarch64)
-                $(error CTX_INCLUDE_MTE_REGS requires AArch64)
-	endif
-endif #(CTX_INCLUDE_MTE_REGS)
-
 ifeq ($(PSA_FWU_SUPPORT),1)
         $(info PSA_FWU_SUPPORT is an experimental feature)
 endif #(PSA_FWU_SUPPORT)
@@ -1046,12 +1029,6 @@ ifeq (${ENABLE_RME},1)
                 $(error `ENABLE_RME=1` requires `SEPARATE_CODE_AND_RODATA=1`)
 	endif
 endif
-
-# Determine if FEAT_RNG is supported
-ENABLE_FEAT_RNG		=	$(if $(findstring rng,${arch-features}),1,0)
-
-# Determine if FEAT_SB is supported
-ENABLE_FEAT_SB		=	$(if $(findstring sb,${arch-features}),1,0)
 
 ifeq ($(PSA_CRYPTO),1)
         $(info PSA_CRYPTO is an experimental feature)
@@ -1178,7 +1155,6 @@ $(eval $(call assert_booleans,\
 	ENABLE_AMU_FCONF \
 	AMU_RESTRICT_COUNTERS \
 	ENABLE_ASSERTIONS \
-	ENABLE_FEAT_SB \
 	ENABLE_PIE \
 	ENABLE_PMF \
 	ENABLE_PSCI_STAT \
@@ -1254,7 +1230,6 @@ $(eval $(call assert_numerics,\
 	ARM_ARCH_MINOR \
 	BRANCH_PROTECTION \
 	CTX_INCLUDE_PAUTH_REGS \
-	CTX_INCLUDE_MTE_REGS \
 	CTX_INCLUDE_NEVE_REGS \
 	CRYPTO_SUPPORT \
 	DISABLE_MTPMU \
@@ -1265,15 +1240,19 @@ $(eval $(call assert_numerics,\
 	ENABLE_FEAT_AMU \
 	ENABLE_FEAT_AMUv1p1 \
 	ENABLE_FEAT_CSV2_2 \
+	ENABLE_FEAT_CSV2_3 \
 	ENABLE_FEAT_DIT \
 	ENABLE_FEAT_ECV \
 	ENABLE_FEAT_FGT \
 	ENABLE_FEAT_HCX \
+	ENABLE_FEAT_MTE \
+	ENABLE_FEAT_MTE2 \
 	ENABLE_FEAT_PAN \
 	ENABLE_FEAT_RNG \
 	ENABLE_FEAT_RNG_TRAP \
 	ENABLE_FEAT_SEL2 \
 	ENABLE_FEAT_TCR2 \
+	ENABLE_FEAT_SB \
 	ENABLE_FEAT_S2PIE \
 	ENABLE_FEAT_S1PIE \
 	ENABLE_FEAT_S2POE \
@@ -1324,7 +1303,6 @@ $(eval $(call add_defines,\
 	CTX_INCLUDE_PAUTH_REGS \
 	CTX_INCLUDE_MPAM_REGS \
 	EL3_EXCEPTION_HANDLING \
-	CTX_INCLUDE_MTE_REGS \
 	CTX_INCLUDE_EL2_REGS \
 	CTX_INCLUDE_NEVE_REGS \
 	DECRYPTION_SUPPORT_${DECRYPTION_SUPPORT} \
@@ -1420,6 +1398,7 @@ $(eval $(call add_defines,\
 	ENABLE_FEAT_SEL2 \
 	ENABLE_FEAT_VHE \
 	ENABLE_FEAT_CSV2_2 \
+	ENABLE_FEAT_CSV2_3 \
 	ENABLE_FEAT_PAN \
 	ENABLE_FEAT_TCR2 \
 	ENABLE_FEAT_S2PIE \
@@ -1427,6 +1406,8 @@ $(eval $(call add_defines,\
 	ENABLE_FEAT_S2POE \
 	ENABLE_FEAT_S1POE \
 	ENABLE_FEAT_GCS \
+	ENABLE_FEAT_MTE \
+	ENABLE_FEAT_MTE2 \
 	ENABLE_FEAT_MTE_PERM \
 	FEATURE_DETECTION \
 	TWED_DELAY \
@@ -1591,8 +1572,8 @@ endif #(NEED_FDT)
 
 # Add Secure Partition packages
 ifeq (${NEED_SP_PKG},yes)
-$(BUILD_PLAT)/sp_gen.mk : ${SP_MK_GEN} ${SP_LAYOUT_FILE} | ${BUILD_PLAT}
-	${PYTHON} "$<" "$@" $(filter-out $<,$^) $(BUILD_PLAT) ${COT} ${SP_DTS_LIST_FRAGMENT}
+$(BUILD_PLAT)/sp_gen.mk: ${SP_MK_GEN} ${SP_LAYOUT_FILE} | ${BUILD_PLAT}
+	@${PYTHON} "$<" "$@" $(filter-out $<,$^) $(BUILD_PLAT) ${COT} ${SP_DTS_LIST_FRAGMENT}
 sp: $(DTBS) $(BUILD_PLAT)/sp_gen.mk $(SP_PKGS)
 	@${ECHO_BLANK_LINE}
 	@echo "Built SP Images successfully"

@@ -47,6 +47,7 @@ BL2_SOURCES     +=	\
 		plat/intel/soc/agilex/soc/agilex_pinmux.c		\
 		plat/intel/soc/common/bl2_plat_mem_params_desc.c	\
 		plat/intel/soc/common/socfpga_image_load.c		\
+		plat/intel/soc/common/socfpga_ros.c			\
 		plat/intel/soc/common/socfpga_storage.c			\
 		plat/intel/soc/common/soc/socfpga_emac.c		\
 		plat/intel/soc/common/soc/socfpga_firewall.c	\
@@ -76,6 +77,8 @@ BL31_SOURCES	+=	\
 		plat/intel/soc/common/sip/socfpga_sip_fcs.c		\
 		plat/intel/soc/common/soc/socfpga_mailbox.c		\
 		plat/intel/soc/common/soc/socfpga_reset_manager.c
+
+$(eval $(call add_define,ARM_PRELOADED_DTB_BASE))
 
 PROGRAMMABLE_RESET_ADDRESS	:= 0
 RESET_TO_BL2			:= 1

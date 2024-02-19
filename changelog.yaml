@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2023, Arm Limited. All rights reserved.
+# Copyright (c) 2021-2024, Arm Limited. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -774,6 +774,9 @@ subsections:
       - title: PSCI
         scope: psci
 
+      - title: ROMlib
+        scope: romlib
+
       - title: GPT
         scope: gpt
 
@@ -1368,6 +1371,9 @@ subsections:
 
         deprecated:
           - cert_create
+
+      - title: Marvell Tools
+        scope: marvell-tools
 
   - title: Dependencies
     scope: deps

@@ -9,6 +9,7 @@
 #define PLATFORM_DEF_H
 
 #include <arch.h>
+#include <plat_common.h>
 #include "versal_def.h"
 
 /*******************************************************************************
@@ -74,8 +75,17 @@
 /*******************************************************************************
  * Platform specific page table and MMU setup constants
  ******************************************************************************/
-#define PLAT_PHY_ADDR_SPACE_SIZE	(1ull << 32)
-#define PLAT_VIRT_ADDR_SPACE_SIZE	(1ull << 32)
+
+#if (BL31_BASE >= (1ULL << 32U))
+/* Address range in High DDR and HBM memory range */
+#define PLAT_ADDR_SPACE_SHIFT		U(42)
+#else
+/* Address range in OCM and Low DDR memory range */
+#define PLAT_ADDR_SPACE_SHIFT		U(32)
+#endif
+
+#define PLAT_PHY_ADDR_SPACE_SIZE        (1ull << PLAT_ADDR_SPACE_SHIFT)
+#define PLAT_VIRT_ADDR_SPACE_SIZE       (1ull << PLAT_ADDR_SPACE_SHIFT)
 
 #define XILINX_OF_BOARD_DTB_MAX_SIZE	U(0x200000)
 
@@ -103,8 +113,8 @@
 #define CACHE_WRITEBACK_SHIFT	6
 #define CACHE_WRITEBACK_GRANULE	(1 << CACHE_WRITEBACK_SHIFT)
 
-#define PLAT_GICD_BASE_VALUE	U(0xF9000000)
-#define PLAT_GICR_BASE_VALUE	U(0xF9080000)
+#define PLAT_ARM_GICD_BASE	U(0xF9000000)
+#define PLAT_ARM_GICR_BASE	U(0xF9080000)
 
 /*
  * Define a list of Group 1 Secure and Group 0 interrupts as per GICv3
@@ -122,6 +132,8 @@
 #define PLAT_VERSAL_G0_IRQ_PROPS(grp) \
 	INTR_PROP_DESC(PLAT_VERSAL_IPI_IRQ, GIC_HIGHEST_SEC_PRIORITY, grp, \
 			GIC_INTR_CFG_EDGE), \
+	INTR_PROP_DESC(CPU_PWR_DOWN_REQ_INTR, GIC_HIGHEST_SEC_PRIORITY, grp, \
+			GIC_INTR_CFG_EDGE)
 
 #define IRQ_MAX		142U
 

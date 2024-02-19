@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2023, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2013-2023, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -27,15 +27,21 @@
 #include <lib/coreboot.h>
 #include <lib/el3_runtime/context_mgmt.h>
 #include <lib/optee_utils.h>
+#include <lib/transfer_list.h>
 #include <lib/xlat_tables/xlat_tables_v2.h>
 #if OPTEE_ALLOW_SMC_LOAD
 #include <libfdt.h>
 #endif  /* OPTEE_ALLOW_SMC_LOAD */
 #include <plat/common/platform.h>
+#include <services/oem/chromeos/widevine_smc_handlers.h>
 #include <tools_share/uuid.h>
 
 #include "opteed_private.h"
 #include "teesmc_opteed.h"
+
+#if OPTEE_ALLOW_SMC_LOAD
+static struct transfer_list_header *bl31_tl;
+#endif
 
 /*******************************************************************************
  * Address of the entrypoint vector table in OPTEE. It is
@@ -56,7 +62,7 @@ DEFINE_SVC_UUID2(optee_image_load_uuid,
 	0xb1eafba3, 0x5d31, 0x4612, 0xb9, 0x06,
 	0xc4, 0xc7, 0xa4, 0xbe, 0x3c, 0xc0);
 
-#define OPTEED_FDT_SIZE 256
+#define OPTEED_FDT_SIZE 1024
 static uint8_t fdt_buf[OPTEED_FDT_SIZE] __aligned(CACHE_WRITEBACK_GRANULE);
 
 #else
@@ -123,9 +129,13 @@ static int32_t opteed_setup(void)
 #else
 	entry_point_info_t *optee_ep_info;
 	uint32_t linear_id;
-	uint64_t opteed_pageable_part;
-	uint64_t opteed_mem_limit;
-	uint64_t dt_addr;
+	uint64_t arg0;
+	uint64_t arg1;
+	uint64_t arg2;
+	uint64_t arg3;
+	struct transfer_list_header *tl = NULL;
+	struct transfer_list_entry *te = NULL;
+	void *dt = NULL;
 
 	linear_id = plat_my_core_pos();
 
@@ -150,17 +160,39 @@ static int32_t opteed_setup(void)
 	if (!optee_ep_info->pc)
 		return 1;
 
-	opteed_rw = optee_ep_info->args.arg0;
-	opteed_pageable_part = optee_ep_info->args.arg1;
-	opteed_mem_limit = optee_ep_info->args.arg2;
-	dt_addr = optee_ep_info->args.arg3;
+	if (TRANSFER_LIST &&
+		optee_ep_info->args.arg1 == (TRANSFER_LIST_SIGNATURE |
+					REGISTER_CONVENTION_VERSION_MASK)) {
+		tl = (void *)optee_ep_info->args.arg3;
+		if (transfer_list_check_header(tl) == TL_OPS_NON) {
+			return 1;
+		}
 
-	opteed_init_optee_ep_state(optee_ep_info,
-				opteed_rw,
-				optee_ep_info->pc,
-				opteed_pageable_part,
-				opteed_mem_limit,
-				dt_addr,
+		opteed_rw = GET_RW(optee_ep_info->spsr);
+		te = transfer_list_find(tl, TL_TAG_FDT);
+		dt = transfer_list_entry_data(te);
+
+		if (opteed_rw == OPTEE_AARCH64) {
+			arg0 = (uint64_t)dt;
+			arg2 = 0;
+		} else {
+			arg2 = (uint64_t)dt;
+			arg0 = 0;
+		}
+
+		arg1 = optee_ep_info->args.arg1;
+		arg3 = optee_ep_info->args.arg3;
+	} else {
+		/* Default handoff arguments */
+		opteed_rw = optee_ep_info->args.arg0;
+		arg0 = optee_ep_info->args.arg1; /* opteed_pageable_part */
+		arg1 = optee_ep_info->args.arg2; /* opteed_mem_limit */
+		arg2 = optee_ep_info->args.arg3; /* dt_addr */
+		arg3 = 0;
+	}
+
+	opteed_init_optee_ep_state(optee_ep_info, opteed_rw, optee_ep_info->pc,
+				arg0, arg1, arg2, arg3,
 				&opteed_sp_context[linear_id]);
 
 	/*
@@ -268,6 +300,62 @@ static int add_coreboot_node(void *fdt)
 }
 #endif /* COREBOOT */
 
+#if CROS_WIDEVINE_SMC
+/*
+ * Adds a options/widevine node with the widevine table information to a device
+ * tree. Returns zero on success or if there is no widevine table information;
+ * failure code otherwise.
+ */
+static int add_options_widevine_node(void *fdt)
+{
+	int ret;
+
+	ret = fdt_begin_node(fdt, "options");
+	if (ret)
+		return ret;
+
+	ret = fdt_begin_node(fdt, "op-tee");
+	if (ret)
+		return ret;
+
+	ret = fdt_begin_node(fdt, "widevine");
+	if (ret)
+		return ret;
+
+	if (cros_oem_tpm_auth_pk.length) {
+		ret = fdt_property(fdt, "tcg,tpm-auth-public-key",
+				   cros_oem_tpm_auth_pk.buffer,
+				   cros_oem_tpm_auth_pk.length);
+		if (ret)
+			return ret;
+	}
+
+	if (cros_oem_huk.length) {
+		ret = fdt_property(fdt, "op-tee,hardware-unique-key",
+				   cros_oem_huk.buffer, cros_oem_huk.length);
+		if (ret)
+			return ret;
+	}
+
+	if (cros_oem_rot.length) {
+		ret = fdt_property(fdt, "google,widevine-root-of-trust-ecc-p256",
+				   cros_oem_rot.buffer, cros_oem_rot.length);
+		if (ret)
+			return ret;
+	}
+
+	ret = fdt_end_node(fdt);
+	if (ret)
+		return ret;
+
+	ret = fdt_end_node(fdt);
+	if (ret)
+		return ret;
+
+	return fdt_end_node(fdt);
+}
+#endif /* CROS_WIDEVINE_SMC */
+
 /*
  * Creates a device tree for passing into OP-TEE. Currently is populated with
  * the coreboot table address.
@@ -295,11 +383,37 @@ static int create_opteed_dt(void)
 		return ret;
 #endif /* COREBOOT */
 
+#if CROS_WIDEVINE_SMC
+	ret = add_options_widevine_node(fdt_buf);
+	if (ret)
+		return ret;
+#endif /* CROS_WIDEVINE_SMC */
+
 	ret = fdt_end_node(fdt_buf);
 	if (ret)
 		return ret;
 
 	return fdt_finish(fdt_buf);
+}
+
+static int32_t create_smc_tl(const void *fdt, uint32_t fdt_sz)
+{
+#if TRANSFER_LIST
+	bl31_tl = transfer_list_init((void *)(uintptr_t)FW_HANDOFF_BASE,
+				FW_HANDOFF_SIZE);
+	if (!bl31_tl) {
+		ERROR("Failed to initialize Transfer List at 0x%lx\n",
+		(unsigned long)FW_HANDOFF_BASE);
+		return -1;
+	}
+
+	if (!transfer_list_add(bl31_tl, TL_TAG_FDT, fdt_sz, fdt)) {
+		return -1;
+	}
+	return 0;
+#else
+	return -1;
+#endif
 }
 
 /*******************************************************************************
@@ -326,6 +440,10 @@ static int32_t opteed_handle_smc_load(uint64_t data_size, uint32_t data_pa)
 	entry_point_info_t optee_ep_info;
 	uint32_t linear_id = plat_my_core_pos();
 	uint64_t dt_addr = 0;
+	uint64_t arg0 = 0;
+	uint64_t arg1 = 0;
+	uint64_t arg2 = 0;
+	uint64_t arg3 = 0;
 
 	mapped_data_pa = page_align(data_pa, DOWN);
 	mapped_data_va = mapped_data_pa;
@@ -394,12 +512,36 @@ static int32_t opteed_handle_smc_load(uint64_t data_size, uint32_t data_pa)
 	dt_addr = (uint64_t)fdt_buf;
 	flush_dcache_range(dt_addr, OPTEED_FDT_SIZE);
 
+	if (TRANSFER_LIST &&
+	    !create_smc_tl((void *)dt_addr, OPTEED_FDT_SIZE)) {
+		struct transfer_list_entry *te = NULL;
+		void *dt = NULL;
+
+		te = transfer_list_find(bl31_tl, TL_TAG_FDT);
+		dt = transfer_list_entry_data(te);
+
+		if (opteed_rw == OPTEE_AARCH64) {
+			arg0 = (uint64_t)dt;
+			arg2 = 0;
+		} else {
+			arg2 = (uint64_t)dt;
+			arg0 = 0;
+		}
+		arg1 = TRANSFER_LIST_SIGNATURE |
+			REGISTER_CONVENTION_VERSION_MASK;
+		arg3 = (uint64_t)bl31_tl;
+	} else {
+		/* Default handoff arguments */
+		arg2 = dt_addr;
+	}
+
 	opteed_init_optee_ep_state(&optee_ep_info,
 				   opteed_rw,
 				   image_pa,
-				   0,
-				   0,
-				   dt_addr,
+				   arg0,
+				   arg1,
+				   arg2,
+				   arg3,
 				   &opteed_sp_context[linear_id]);
 	if (opteed_init_with_entry_point(&optee_ep_info) == 0) {
 		rc = -EFAULT;

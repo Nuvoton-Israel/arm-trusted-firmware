@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2023-2024, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -237,12 +237,13 @@ struct em_cpu_list cpu_list[] = {
 		[3] = {2242638, 0x01, 0x02, ERRATA_A78C_2242638},
 		[4] = {2376749, 0x01, 0x02, ERRATA_A78C_2376749},
 		[5] = {2395411, 0x01, 0x02, ERRATA_A78C_2395411},
-		[6] = {2712575, 0x01, 0x02, ERRATA_A78C_2712575, \
+		[6] = {2683027, 0x01, 0x02, ERRATA_A78C_2683027},
+		[7] = {2712575, 0x01, 0x02, ERRATA_A78C_2712575, \
 			ERRATA_NON_ARM_INTERCONNECT},
-		[7] = {2743232, 0x01, 0x02, ERRATA_A78C_2743232},
-		[8] = {2772121, 0x00, 0x02, ERRATA_A78C_2772121},
-		[9] = {2779484, 0x01, 0x02, ERRATA_A78C_2779484},
-		[10 ... ERRATA_LIST_END] = UNDEF_ERRATA,
+		[8] = {2743232, 0x01, 0x02, ERRATA_A78C_2743232},
+		[9] = {2772121, 0x00, 0x02, ERRATA_A78C_2772121},
+		[10] = {2779484, 0x01, 0x02, ERRATA_A78C_2779484},
+		[11 ... ERRATA_LIST_END] = UNDEF_ERRATA,
 	}
 },
 #endif /* CORTEX_A78C_H_INC */
@@ -434,9 +435,10 @@ struct em_cpu_list cpu_list[] = {
 {
 	.cpu_partnumber = CORTEX_A715_MIDR,
 	.cpu_errata_list = {
-		[0] = {2701951, 0x00, 0x11, ERRATA_A715_2701951, \
+		[0] = {2561034, 0x10, 0x10, ERRATA_A715_2561034},
+		[1] = {2701951, 0x00, 0x11, ERRATA_A715_2701951, \
 			ERRATA_NON_ARM_INTERCONNECT},
-		[1 ... ERRATA_LIST_END] = UNDEF_ERRATA,
+		[2 ... ERRATA_LIST_END] = UNDEF_ERRATA,
 	}
 },
 #endif /* CORTEX_A715_H_INC */
@@ -446,12 +448,15 @@ struct em_cpu_list cpu_list[] = {
 	.cpu_partnumber = CORTEX_X3_MIDR,
 	.cpu_errata_list = {
 		[0] = {2070301, 0x00, 0x12, ERRATA_X3_2070301},
-		[1] = {2313909, 0x00, 0x10, ERRATA_X3_2313909},
-		[2] = {2615812, 0x00, 0x11, ERRATA_X3_2615812},
-		[3] = {2742421, 0x00, 0x11, ERRATA_X3_2742421},
-		[4] = {2743088, 0x00, 0x11, ERRATA_X3_2743088},
-		[5] = {2779509, 0x00, 0x11, ERRATA_X3_2779509},
-		[6 ... ERRATA_LIST_END] = UNDEF_ERRATA,
+		[1] = {2266875, 0x00, 0x10, ERRATA_X3_2266875},
+		[2] = {2302506, 0x00, 0x11, ERRATA_X3_2302506},
+		[3] = {2313909, 0x00, 0x10, ERRATA_X3_2313909},
+		[4] = {2615812, 0x00, 0x11, ERRATA_X3_2615812},
+		[5] = {2641945, 0x00, 0x10, ERRATA_X3_2641945},
+		[6] = {2742421, 0x00, 0x11, ERRATA_X3_2742421},
+		[7] = {2743088, 0x00, 0x11, ERRATA_X3_2743088},
+		[8] = {2779509, 0x00, 0x11, ERRATA_X3_2779509},
+		[9 ... ERRATA_LIST_END] = UNDEF_ERRATA,
 	}
 },
 #endif /* CORTEX_X3_H_INC */

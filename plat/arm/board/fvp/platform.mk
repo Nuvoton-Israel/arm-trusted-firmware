@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2013-2023, Arm Limited and Contributors. All rights reserved.
+# Copyright (c) 2013-2024, Arm Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -57,12 +57,10 @@ ifneq (${SPD}, tspd)
 	ENABLE_FEAT_TWED		:= 2
 	ENABLE_FEAT_GCS			:= 2
 ifeq (${ARCH}, aarch64)
-ifneq (${SPD}, spmd)
 ifeq (${SPM_MM}, 0)
 ifeq (${CTX_INCLUDE_FPREGS}, 0)
 	ENABLE_SME_FOR_NS		:= 2
 	ENABLE_SME2_FOR_NS		:= 2
-endif
 endif
 endif
 endif
@@ -75,6 +73,7 @@ ifeq (${ARCH}, aarch64)
 endif
 ENABLE_SYS_REG_TRACE_FOR_NS	:= 2
 ENABLE_FEAT_CSV2_2		:= 2
+ENABLE_FEAT_CSV2_3		:= 2
 ENABLE_FEAT_DIT			:= 2
 ENABLE_FEAT_PAN			:= 2
 ENABLE_FEAT_MTE_PERM		:= 2
@@ -398,11 +397,15 @@ endif
 endif
 
 ifeq (${HANDLE_EA_EL3_FIRST_NS},1)
-ifeq (${ENABLE_FEAT_RAS},1)
-BL31_SOURCES		+=	plat/arm/board/fvp/aarch64/fvp_ras.c
-else
-BL31_SOURCES		+= 	plat/arm/board/fvp/aarch64/fvp_ea.c
-endif
+    ifeq (${ENABLE_FEAT_RAS},1)
+    	ifeq (${PLATFORM_TEST_FFH_LSP_RAS_SP},1)
+            BL31_SOURCES		+=	plat/arm/board/fvp/aarch64/fvp_lsp_ras_sp.c
+	else
+            BL31_SOURCES		+=	plat/arm/board/fvp/aarch64/fvp_ras.c
+	endif
+    else
+        BL31_SOURCES		+= 	plat/arm/board/fvp/aarch64/fvp_ea.c
+    endif
 endif
 
 ifneq (${ENABLE_STACK_PROTECTOR},0)
@@ -438,22 +441,6 @@ $(eval $(call add_define,PLAT_EXTRA_LD_SCRIPT))
 
 ifneq (${RESET_TO_BL2}, 0)
     override BL1_SOURCES =
-endif
-
-# Include Measured Boot makefile before any Crypto library makefile.
-# Crypto library makefile may need default definitions of Measured Boot build
-# flags present in Measured Boot makefile.
-ifeq (${MEASURED_BOOT},1)
-    RSS_MEASURED_BOOT_MK := drivers/measured_boot/rss/rss_measured_boot.mk
-    $(info Including ${RSS_MEASURED_BOOT_MK})
-    include ${RSS_MEASURED_BOOT_MK}
-
-    ifneq (${MBOOT_RSS_HASH_ALG}, sha256)
-        $(eval $(call add_define,TF_MBEDTLS_MBOOT_USE_SHA512))
-    endif
-
-    BL1_SOURCES		+=	${MEASURED_BOOT_SOURCES}
-    BL2_SOURCES		+=	${MEASURED_BOOT_SOURCES}
 endif
 
 include plat/arm/board/common/board_common.mk
@@ -514,6 +501,22 @@ ifeq (${PLATFORM_TEST_RAS_FFH}, 1)
     endif
     ifeq (${HANDLE_EA_EL3_FIRST_NS}, 0)
          $(error "PLATFORM_TEST_RAS_FFH expects HANDLE_EA_EL3_FIRST_NS to be 1")
+    endif
+endif
+
+$(eval $(call add_define,PLATFORM_TEST_FFH_LSP_RAS_SP))
+ifeq (${PLATFORM_TEST_FFH_LSP_RAS_SP}, 1)
+    ifeq (${PLATFORM_TEST_RAS_FFH}, 1)
+         $(error "PLATFORM_TEST_RAS_FFH is incompatible with PLATFORM_TEST_FFH_LSP_RAS_SP")
+    endif
+    ifeq (${ENABLE_SPMD_LP}, 0)
+         $(error "PLATFORM_TEST_FFH_LSP_RAS_SP expects ENABLE_SPMD_LP to be 1")
+    endif
+    ifeq (${ENABLE_FEAT_RAS}, 0)
+         $(error "PLATFORM_TEST_FFH_LSP_RAS_SP expects ENABLE_FEAT_RAS to be 1")
+    endif
+    ifeq (${HANDLE_EA_EL3_FIRST_NS}, 0)
+         $(error "PLATFORM_TEST_FFH_LSP_RAS_SP expects HANDLE_EA_EL3_FIRST_NS to be 1")
     endif
 endif
 

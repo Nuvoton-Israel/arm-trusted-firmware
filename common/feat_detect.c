@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2022-2024, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -67,18 +67,6 @@ static void read_feat_pauth(void)
 {
 #if (ENABLE_PAUTH == FEAT_STATE_ALWAYS) || (CTX_INCLUDE_PAUTH_REGS == FEAT_STATE_ALWAYS)
 	feat_detect_panic(is_armv8_3_pauth_present(), "PAUTH");
-#endif
-}
-
-/************************************************
- * Feature : FEAT_MTE (Memory Tagging Extension)
- ***********************************************/
-static void read_feat_mte(void)
-{
-#if (CTX_INCLUDE_MTE_REGS == FEAT_STATE_ALWAYS)
-	unsigned int mte = get_armv8_5_mte_support();
-
-	feat_detect_panic((mte != MTE_UNIMPLEMENTED), "MTE");
 #endif
 }
 
@@ -179,7 +167,10 @@ void detect_arch_features(void)
 		      "TRF", 1, 1);
 
 	/* v8.5 features */
-	read_feat_mte();
+	check_feature(ENABLE_FEAT_MTE, read_feat_mte_id_field(), "MTE",
+		      MTE_IMPLEMENTED_EL0, MTE_IMPLEMENTED_ASY);
+	check_feature(ENABLE_FEAT_MTE2, read_feat_mte_id_field(), "MTE2",
+		      MTE_IMPLEMENTED_ELX, MTE_IMPLEMENTED_ASY);
 	check_feature(ENABLE_FEAT_RNG, read_feat_rng_id_field(), "RNG", 1, 1);
 	read_feat_bti();
 	read_feat_rng_trap();
@@ -215,6 +206,8 @@ void detect_arch_features(void)
 		      "S1POE", 1, 1);
 	check_feature(ENABLE_FEAT_MTE_PERM, read_feat_mte_perm_id_field(),
 		      "MTE_PERM", 1, 1);
+	check_feature(ENABLE_FEAT_CSV2_3, read_feat_csv2_id_field(),
+		      "CSV2_3", 3, 3);
 
 	/* v9.0 features */
 	check_feature(ENABLE_BRBE_FOR_NS, read_feat_brbe_id_field(),

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2015-2023, Arm Limited and Contributors. All rights reserved.
+# Copyright (c) 2015-2024, Arm Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -48,6 +48,18 @@ endef
 # $(eval $(call default_zeros,FOO BAR))
 define default_zeros
 	$(foreach var,$1,$(eval $(call default_zero,$(var))))
+endef
+
+# Convenience function for setting a variable to 1 if not previously set
+# $(eval $(call default_one,FOO))
+define default_one
+	$(eval $(1) ?= 1)
+endef
+
+# Convenience function for setting a list of variables to 1 if not previously set
+# $(eval $(call default_ones,FOO BAR))
+define default_ones
+	$(foreach var,$1,$(eval $(call default_one,$(var))))
 endef
 
 # Convenience function for adding build definitions
@@ -101,9 +113,7 @@ endef
 
 # Convenience function to check for a given linker option. An call to
 # $(call ld_option, --no-XYZ) will return --no-XYZ if supported by the linker
-define ld_option
-	$(shell if $(LD) $(1) -v >/dev/null 2>&1; then echo $(1); fi )
-endef
+ld_option = $(shell $(LD) $(1) -Wl,--version >/dev/null 2>&1 || $(LD) $(1) -v >/dev/null 2>&1 && echo $(1))
 
 # Convenience function to check for a given compiler option. A call to
 # $(call cc_option, --no-XYZ) will return --no-XYZ if supported by the compiler
@@ -658,7 +668,7 @@ $(eval DTBDEP := $(patsubst %.dtb,%.d,$(DOBJ)))
 $(DOBJ): $(2) $(filter-out %.d,$(MAKEFILE_LIST)) | fdt_dirs
 	$${ECHO} "  CPP     $$<"
 	$(eval DTBS       := $(addprefix $(1)/,$(call SOURCES_TO_DTBS,$(2))))
-	$$(Q)$$(PP) $$(DTC_CPPFLAGS) -MT $(DTBS) -MMD -MF $(DTSDEP) -o $(DPRE) $$<
+	$$(Q)$$(CPP) $$(DTC_CPPFLAGS) -MT $(DTBS) -MMD -MF $(DTSDEP) -o $(DPRE) $$<
 	$${ECHO} "  DTC     $$<"
 	$$(Q)$$(DTC) $$(DTC_FLAGS) -d $(DTBDEP) -o $$@ $(DPRE)
 
