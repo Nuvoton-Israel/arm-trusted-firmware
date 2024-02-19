@@ -42,7 +42,7 @@ arm_print_gic_regs
  */
 .macro plat_crash_print_regs
 plat_print_gic_regs
-print_cci_regs
+/*print_cci_regs*/
 .endm
 
 #endif /* PLAT_MACROS_S */

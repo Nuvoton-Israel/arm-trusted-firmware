@@ -319,7 +319,7 @@
 			BL_RO_DATA_END - BL_RO_DATA_BASE,	\
 			MT_RO_DATA | EL3_PAS)
 #else
-#define ARM_MAP_BL_RO		MAP_REGION_FLAT(	\
+#define ARM_MAP_BL_RO_NOT_USED		MAP_REGION_FLAT(	\
 			BL_CODE_BASE, BL_CODE_END - BL_CODE_BASE,	\
 			MT_CODE | EL3_PAS)
 #endif /* SEPARATE_CODE_AND_RODATA */
@@ -483,9 +483,9 @@
 #define NEW_SRAM_ALLOCATION
 
 #ifdef NEW_SRAM_ALLOCATION
-	#define BL31_BASE				0x20001000
+	#define BL31_BASE				0x02000000
 #else
-	#define BL31_BASE				0x20001000
+	#define BL31_BASE				0x02001000
 #endif /* NEW_SRAM_ALLOCATION */
 
 #define BL31_LIMIT			BL2_BASE	/* PLAT_ARM_MAX_BL31_SIZE */
@@ -511,6 +511,7 @@
  * no SPD and no SPM-MM, as they are the only ones that can be used as BL32.
  */
 #if defined(SPD_none) && !SPM_MM
+#error BL32_BASE is not defined
 #undef BL32_BASE
 #endif /* SPD_none && !SPM_MM */
 

@@ -13,6 +13,7 @@ PMD_SPM_AT_SEL2	:= 0
 SPMD_SPM_AT_SEL2	:= 0
 #temporary until the RAM size is reduced
 USE_COHERENT_MEM	:=	1
+INIT_UNUSED_NS_EL2  := 1
 
 
 $(eval $(call add_define,RESET_TO_BL31))
