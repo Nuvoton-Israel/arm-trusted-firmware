@@ -34,6 +34,9 @@
 static entry_point_info_t bl32_image_ep_info;
 static entry_point_info_t bl33_image_ep_info;
 
+extern uintptr_t npcm845x_get_base_clk(void);
+extern uintptr_t npcm845x_get_base_gcr(void);
+
 #if !RESET_TO_BL31
 /*
  * Check that BL31_BASE is above ARM_FW_CONFIG_LIMIT. The reserved page
@@ -67,7 +70,6 @@ IMPORT_SYM(unsigned long, __INIT_CODE_END__, BL_CODE_END_UNALIGNED);
 					BL31_NOBITS_LIMIT - \
 					BL31_NOBITS_BASE, \
 					MT_MEMORY | MT_RW | EL3_PAS)
-
 #endif /* SEPARATE_NOBITS_REGION */
 
 /******************************************************************************
@@ -118,7 +120,10 @@ int board_uart_init(void)
 
 unsigned int plat_get_syscnt_freq2(void)
 {
-	return (unsigned int)COUNTER_FREQUENCY;
+	/*
+	 * because BootBlock sets the correct frequency based on PLL
+	*/
+	return (unsigned int)read_cntfrq_el0();
 }
 
 /******************************************************************************
@@ -348,7 +353,6 @@ void __init npcm845x_bl31_plat_arch_setup(void)
 #endif /* SECONDARY_BRINGUP */
 		{0}
 	};
-
 	setup_page_tables(bl_regions, plat_arm_get_mmap());
 	enable_mmu_el3(0U);
 	NOTICE("Done enabling MMU\n");
