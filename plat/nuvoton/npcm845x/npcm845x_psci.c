@@ -11,17 +11,27 @@
 
 #include <arch.h>
 #include <arch_helpers.h>
+#include <bl31/interrupt_mgmt.h>
 #include <common/debug.h>
 #include <drivers/arm/gicv2.h>
 #include <lib/mmio.h>
 #include <lib/psci/psci.h>
 #include <lib/semihosting.h>
+#include <lib/spinlock.h>
 #include <npcm845x_clock.h>
 #include <plat/arm/common/plat_arm.h>
 #include <plat/common/platform.h>
 #include <plat_npcm845x.h>
 
 #define ADP_STOPPED_APPLICATION_EXIT 0x20026
+
+/*
+ * State for quiescing secondary CPUs before system reset.
+ * Each CPU sets its bit in cpus_stopped when it enters the stop handler.
+ * The resetting CPU polls this value to know all others are parked.
+ */
+static volatile uint32_t cpus_stopped;
+static spinlock_t reset_lock;
 
 /* Make composite power state parameter till power level 0 */
 #if PSCI_EXTENDED_STATE_ID
@@ -220,14 +230,90 @@ void npcm845x_pwr_domain_suspend_finish(const psci_power_state_t *target_state)
 }
 
 
+/*
+ * EL3 interrupt handler invoked on secondary CPUs when a system reset
+ * is requested.  The CPU acknowledges the SGI, signals that it has
+ * stopped, and parks in WFI so that no further memory accesses are
+ * generated before the SWRST1 fires.
+ */
+static uint64_t npcm845x_cpu_stop_handler(uint32_t id, uint32_t flags,
+					  void *handle, void *cookie)
+{
+	unsigned int cpu_id = plat_my_core_pos();
+	uint32_t irq;
+
+	irq = plat_ic_acknowledge_interrupt();
+	if (irq < 1022U) {
+		plat_ic_end_of_interrupt(irq);
+	}
+
+	/* Drain all outstanding memory transactions on this CPU */
+	dsbsy();
+	isb();
+
+	/* Signal that this CPU has stopped */
+	spin_lock(&reset_lock);
+	cpus_stopped |= (1U << cpu_id);
+	dsb();
+	spin_unlock(&reset_lock);
+
+	/* Park forever -- never return to the non-secure world */
+	while (1) {
+		wfi();
+	}
+
+	/* Not reached */
+	return 0;
+}
+
+void npcm845x_cpu_stop_handler_init(void)
+{
+	uint32_t flags = 0;
+	int rc;
+
+	set_interrupt_rm_flag(flags, NON_SECURE);
+	rc = register_interrupt_type_handler(INTR_TYPE_EL3,
+					     npcm845x_cpu_stop_handler,
+					     flags);
+	if (rc != 0) {
+		ERROR("Failed to register CPU stop SGI handler (%d)\n", rc);
+	}
+}
+
 void __dead2 npcm845x_system_reset(void)
 {
 	uintptr_t RESET_BASE_ADDR;
 	uint32_t val;
+	unsigned int my_cpu = plat_my_core_pos();
+	uint32_t all_stopped;
 
 	NOTICE("%s() nuvoton_psci\n", __func__);
 	console_flush();
 
+	dsbsy();
+	isb();
+
+	/*
+	 * Send an EL3 SGI to every other CPU so that they stop all
+	 * memory accesses and park in WFI before SWRST1 is triggered.
+	 */
+	for (unsigned int i = 0; i < PLATFORM_CORE_COUNT; i++) {
+		if (i != my_cpu) {
+			plat_ic_raise_el3_sgi(FIQ_SMP_CALL_SGI,
+					      (u_register_t)i);
+		}
+	}
+
+	/* Wait until every other CPU has acknowledged and parked */
+	all_stopped = ((1U << PLATFORM_CORE_COUNT) - 1U) & ~(1U << my_cpu);
+	while ((cpus_stopped & all_stopped) != all_stopped) {
+		;
+	}
+
+	/*
+	 * All other CPUs are in WFI with no pending memory accesses.
+	 * Safe to trigger SW1 reset.
+	 */
 	dsbsy();
 	isb();
 

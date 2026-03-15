@@ -185,7 +185,10 @@ ifeq (${ARCH}, aarch64)
 PLAT_INCLUDES	+=	-Iinclude/plat/arm/common/aarch64
 endif
 
-# Include GICv3 driver files
+# Route GICv2 Group 0 interrupts to EL3 as FIQ
+GICV2_G0_FOR_EL3	:=	1
+
+# Include GICv2 driver files
 include drivers/arm/gic/v2/gicv2.mk
 
 NPCM850_GIC_SOURCES	:=	${GICV2_SOURCES}
