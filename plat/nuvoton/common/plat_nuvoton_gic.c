@@ -13,6 +13,9 @@
 
 static const interrupt_prop_t g0_interrupt_props[] = {
 	INTR_PROP_DESC(FIQ_SMP_CALL_SGI, GIC_HIGHEST_SEC_PRIORITY,
+			GICV2_INTR_GROUP0, GIC_INTR_CFG_EDGE),
+	/* WD2 pre-timeout: fires 1024 prescale clocks before watchdog reset */
+	INTR_PROP_DESC(NPCM845X_WDG_INT2, GIC_HIGHEST_SEC_PRIORITY,
 			GICV2_INTR_GROUP0, GIC_INTR_CFG_LEVEL),
 };
 

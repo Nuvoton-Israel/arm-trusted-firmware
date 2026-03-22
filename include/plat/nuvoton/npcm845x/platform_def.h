@@ -97,6 +97,12 @@
 
 #define FIQ_SMP_CALL_SGI 10
 
+/*
+ * WD2 pre-timeout FIQ: GIC interrupt #49 → ARM A35 INTID 81
+ * (Timer Module 2 watchdog, fires 1024 prescale clocks before WD reset)
+ */
+#define NPCM845X_WDG_INT2 81U
+
 /* (0x00040000) 128  KB, the rest 128K if it is non secured */
 #define PLAT_ARM_TRUSTED_SRAM_SIZE UL(0x00020000)
 
