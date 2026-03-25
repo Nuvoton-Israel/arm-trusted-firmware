@@ -10,6 +10,7 @@
 #include <drivers/arm/gicv2.h>
 #include <plat/common/platform.h>
 #include <platform_def.h>
+#include <common/debug.h>
 
 static const interrupt_prop_t g0_interrupt_props[] = {
 	INTR_PROP_DESC(FIQ_SMP_CALL_SGI, GIC_HIGHEST_SEC_PRIORITY,
@@ -28,7 +29,9 @@ gicv2_driver_data_t arm_gic_data = {
 
 void plat_gic_driver_init(void)
 {
+	INFO("Function: %s:%d\n", __func__, __LINE__);
 	gicv2_driver_init(&arm_gic_data);
+	INFO("Function: %s:%d\n", __func__, __LINE__);
 }
 
 void plat_gic_init(void)

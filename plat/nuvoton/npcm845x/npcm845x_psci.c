@@ -25,19 +25,6 @@
 
 #define ADP_STOPPED_APPLICATION_EXIT 0x20026
 
-/* Timer Module 2 watchdog (WD2) pre-timeout interrupt support */
-#define TMR2_BA          0xF000A000U
-#define WTCR_OFFSET      0x001CU
-#define WTCR_WTLK        BIT_32(15)      /* Watchdog Timer Lock (locks config) */
-#define WTCR_WTIE        BIT_32(6)       /* Watchdog Timer Interrupt Enable */
-#define WTCR_WTRE        BIT_32(1)       /* Watchdog Timer Reset Enable */
-#define WTCR_WTIF        BIT_32(3)       /* Watchdog Timer Interrupt Flag (W1C) */
-#define WTCR_WTRF        BIT_32(2)       /* Watchdog Timer Reset Flag (W1C) */
-#define WTCR_WTCLK_MASK  (U(3) << 10)   /* Clock prescale field [11:10] */
-#define WTCR_WTCLK_2048  (U(2) << 10)   /* Prescale divide by 2048 */
-#define WTCR_WDT_CNT_MASK (U(0xFF) << 16) /* Watchdog Count field [23:16] */
-#define WTCR_WDT_CNT_MAX  (U(0xFF) << 16) /* Max count: 256 intervals */
-
 /*
  * State for quiescing secondary CPUs before system reset.
  * Each CPU sets its bit in cpus_stopped when it enters the stop handler.
@@ -255,6 +242,7 @@ static uint64_t npcm845x_cpu_stop_handler(uint32_t id, uint32_t flags,
 	unsigned int cpu_id = plat_my_core_pos();
 	uint32_t irq;
 
+	INFO("Function: %s:%d\n", __func__, __LINE__);
 	irq = plat_ic_acknowledge_interrupt();
 	if (irq < 1022U) {
 		plat_ic_end_of_interrupt(irq);
@@ -289,9 +277,13 @@ static uint64_t npcm845x_cpu_stop_handler(uint32_t id, uint32_t flags,
 		while ((cpus_stopped & all_stopped) != all_stopped) {
 			;
 		}
-	} else {
-		NOTICE("%s: CPU%u: SGI stop handler (irq=%u)\n",
+	} else if (irq == FIQ_SMP_CALL_SGI) {
+		NOTICE("%s: CPU%u: stop SGI (irq=%u)\n",
 		       __func__, cpu_id, irq);
+	} else {
+		ERROR("%s: CPU%u: unexpected EL3 interrupt (irq=%u)\n",
+		      __func__, cpu_id, irq);
+		panic();
 	}
 
 	/* Drain all outstanding memory transactions on this CPU */
@@ -318,35 +310,13 @@ void npcm845x_cpu_stop_handler_init(void)
 	uint32_t flags = 0;
 	int rc;
 
+	INFO("Function: %s:%d\n", __func__, __LINE__);
 	set_interrupt_rm_flag(flags, NON_SECURE);
 	rc = register_interrupt_type_handler(INTR_TYPE_EL3,
 					     npcm845x_cpu_stop_handler,
 					     flags);
 	if (rc != 0) {
 		ERROR("Failed to register CPU stop SGI handler (%d)\n", rc);
-	}
-
-	/*
-	 * Configure WD2 pre-timeout interrupt:
-	 * - Set WTCLK=2048 (bits[11:10]=10): the interrupt fires 1024 prescale
-	 *   clocks before the watchdog reset, giving a ~84 ms quiesce window
-	 *   (1024 * 2048 / 25 MHz).
-	 * - Enable WTIE (bit 6) to generate the FIQ.
-	 * - Enable WTRE (bit 1) so the watchdog also generates a system reset.
-	 * - Set WDT_CNT=0xFF (bits[23:16]) for the maximum of 256 intervals.
-	 * - Set WTLK (bit 15) to lock the configuration register.
-	 * W1C bits (WTIF, WTRF) are masked out of the read to avoid accidentally
-	 * clearing them during the read-modify-write.
-	 */
-	{
-		uint32_t wtcr;
-
-		wtcr = mmio_read_32(TMR2_BA + WTCR_OFFSET);
-		wtcr &= ~(WTCR_WTIF | WTCR_WTRF | WTCR_WTCLK_MASK | WTCR_WDT_CNT_MASK);
-		wtcr |= WTCR_WTCLK_2048 | WTCR_WTIE | WTCR_WTRE | WTCR_WDT_CNT_MAX;
-		mmio_write_32(TMR2_BA + WTCR_OFFSET, wtcr);
-		/* Lock: prevents further config changes (WTR/WTIF/WTRF still writable) */
-		mmio_write_32(TMR2_BA + WTCR_OFFSET, wtcr | WTCR_WTLK);
 	}
 }
 
@@ -358,6 +328,7 @@ void __dead2 npcm845x_system_reset(void)
 	uint32_t all_stopped;
 
 	NOTICE("%s() nuvoton_psci\n", __func__);
+	INFO("Function: %s:%d\n", __func__, __LINE__);
 	console_flush();
 
 	dsbsy();

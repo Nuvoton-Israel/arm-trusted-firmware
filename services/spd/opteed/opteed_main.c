@@ -131,6 +131,11 @@ static void register_opteed_interrupt_handler(void)
 	u_register_t flags;
 	uint64_t rc;
 
+	if (!plat_ic_has_interrupt_type(INTR_TYPE_S_EL1)) {
+		WARN("Skipping OP-TEE S-EL1 interrupt handler registration\n");
+		return;
+	}
+
 	flags = 0;
 	set_interrupt_rm_flag(flags, NON_SECURE);
 	rc = register_interrupt_type_handler(INTR_TYPE_S_EL1,

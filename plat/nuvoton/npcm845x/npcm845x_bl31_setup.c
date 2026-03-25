@@ -272,7 +272,7 @@ void bl31_platform_setup(void)
 	plat_gic_driver_init();
 	plat_gic_init();
 
-/* Register EL3 SGI handler for quiescing CPUs before system reset */
+/* Register EL3 SGI handler for WD2 pre-timeout and reset quiesce */
 	npcm845x_cpu_stop_handler_init();
 
 #if RESET_TO_BL31
