@@ -299,6 +299,7 @@ static int npcm845x_wd2_ehf_handler(uint32_t intr_raw, uint32_t flags,
 	(void)cookie;
 
 	if (irq == INTR_ID_UNAVAILABLE) {
+		mmio_write_32(0xf0800E7C, mmio_read_32(0xf0800E7C)  | (0x00000100 << cpu_id));
 		return 0;
 	}
 
@@ -312,14 +313,19 @@ static int npcm845x_wd2_ehf_handler(uint32_t intr_raw, uint32_t flags,
 
 		/* Send stop SGI to every other online CPU */
 		npcm845x_raise_stop_sgis(all_stopped);
+		mmio_write_32(0xf0800E7C, mmio_read_32(0xf0800E7C) | (0x00010000 << cpu_id));
 
 		/* Wait until all other online CPUs have parked */
 		while ((cpus_stopped & all_stopped) != all_stopped) {
 			;
 		}
 	} else if (irq == FIQ_SMP_CALL_SGI) {
+		spin_lock(&reset_lock);
+		mmio_write_32(0xf0800E7C, mmio_read_32(0xf0800E7C)  | (0x00100000 << cpu_id)); /* Set this CPU's bit in the interrupt flag register */
+		spin_unlock(&reset_lock);
 		//NOTICE("%s: CPU%u: stop SGI (irq=%u)\n", __func__, cpu_id, irq);
 	} else {
+		mmio_write_32(0xf0800E7C, mmio_read_32(0xf0800E7C) | (0x01000000 << cpu_id)); /* Set this CPU's bit in the interrupt flag register */
 		//ERROR("%s: CPU%u: unexpected EL3 interrupt (irq=%u)\n", __func__, cpu_id, irq);
 		panic();
 	}
@@ -351,6 +357,7 @@ static int npcm845x_wd2_ehf_handler(uint32_t intr_raw, uint32_t flags,
 		/* Setting SW1 control register */
 		mmio_write_32(RESET_BASE_ADDR + 0x44, val);
 		/* Set SW1 reset */
+		mmio_write_32(0xf0800E7C, mmio_read_32(0xf0800E7C) | (0x10000000 << cpu_id)); /* Set this CPU's bit in the interrupt flag register */
 		mmio_write_32(RESET_BASE_ADDR + 0x14, 0x8);
 		dsb();
 	}
@@ -416,6 +423,7 @@ void __dead2 npcm845x_system_reset(void)
 	/* Setting SW1 control register */
 	mmio_write_32(RESET_BASE_ADDR + 0x44, val);
 	/* Set SW1 reset */
+	mmio_write_32(0xf0800E7C, mmio_read_32(0xf0800E7C) | (0x00000001 << my_cpu));
 	mmio_write_32(RESET_BASE_ADDR + 0x14, 0x8);
 	dsb();
 
