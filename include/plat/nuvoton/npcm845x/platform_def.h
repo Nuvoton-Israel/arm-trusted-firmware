@@ -103,6 +103,14 @@
  */
 #define NPCM845X_WDG_INT2 81U
 
+/* NPCM845x uses 3 upper secure priority bits for EHF dispatching. */
+#define PLAT_PRI_BITS U(3)
+
+/* EHF priority used by the WD2 firmware-first dispatcher and reset SGI. */
+#define PLAT_WD2_PRI U(0x20)
+
+#define PLAT_EHF_DESC EHF_PRI_DESC(PLAT_PRI_BITS, PLAT_WD2_PRI)
+
 /* (0x00040000) 128  KB, the rest 128K if it is non secured */
 #define PLAT_ARM_TRUSTED_SRAM_SIZE UL(0x00020000)
 

@@ -13,18 +13,22 @@
 #include <common/debug.h>
 
 static const interrupt_prop_t g0_interrupt_props[] = {
-	INTR_PROP_DESC(FIQ_SMP_CALL_SGI, GIC_HIGHEST_SEC_PRIORITY,
+	INTR_PROP_DESC(FIQ_SMP_CALL_SGI, PLAT_WD2_PRI,
 			GICV2_INTR_GROUP0, GIC_INTR_CFG_EDGE),
-	/* WD2 pre-timeout: fires 1024 prescale clocks before watchdog reset */
-	INTR_PROP_DESC(NPCM845X_WDG_INT2, GIC_HIGHEST_SEC_PRIORITY,
+	/* WD2 pre-timeout is handled by the same EL3 dispatcher as the stop SGI. */
+	INTR_PROP_DESC(NPCM845X_WDG_INT2, PLAT_WD2_PRI,
 			GICV2_INTR_GROUP0, GIC_INTR_CFG_LEVEL),
 };
+
+static unsigned int target_mask_array[PLATFORM_CORE_COUNT];
 
 gicv2_driver_data_t arm_gic_data = {
 	.gicd_base = BASE_GICD_BASE,
 	.gicc_base = BASE_GICC_BASE,
 	.interrupt_props = g0_interrupt_props,
 	.interrupt_props_num = ARRAY_SIZE(g0_interrupt_props),
+	.target_masks = target_mask_array,
+	.target_masks_num = ARRAY_SIZE(target_mask_array),
 };
 
 void plat_gic_driver_init(void)
@@ -38,6 +42,7 @@ void plat_gic_init(void)
 {
 	gicv2_distif_init();
 	gicv2_pcpu_distif_init();
+	gicv2_set_pe_target_mask(plat_my_core_pos());
 	gicv2_cpuif_enable();
 }
 
@@ -54,4 +59,5 @@ void plat_gic_cpuif_disable(void)
 void plat_gic_pcpu_init(void)
 {
 	gicv2_pcpu_distif_init();
+	gicv2_set_pe_target_mask(plat_my_core_pos());
 }

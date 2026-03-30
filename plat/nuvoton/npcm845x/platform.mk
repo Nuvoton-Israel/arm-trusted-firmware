@@ -13,6 +13,8 @@ SPMD_SPM_AT_SEL2	:= 0
 #temporary until the RAM size is reduced
 USE_COHERENT_MEM	:=	1
 INIT_UNUSED_NS_EL2  := 1
+SPD	:= opteed
+EL3_EXCEPTION_HANDLING	:= 1
 
 
 $(eval $(call add_define,RESET_TO_BL31))
@@ -304,7 +306,7 @@ endif
 endif
 
 ifeq (${EL3_EXCEPTION_HANDLING},1)
-BL31_SOURCES	+=	plat/arm/common/aarch64/arm_ehf.c
+BL31_SOURCES	+=	plat/common/aarch64/plat_ehf.c
 endif
 
 ifeq (${SDEI_SUPPORT},1)
@@ -386,10 +388,6 @@ ifeq (${MEASURED_BOOT},1)
 MEASURED_BOOT_MK := drivers/measured_boot/measured_boot.mk
 $(info Including ${MEASURED_BOOT_MK})
 include ${MEASURED_BOOT_MK}
-endif
-
-ifeq (${EL3_EXCEPTION_HANDLING},1)
-BL31_SOURCES	+=	plat/arm/common/aarch64/arm_ehf.c
 endif
 
 BL1_SOURCES	:=
