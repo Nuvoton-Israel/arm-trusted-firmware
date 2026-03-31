@@ -13,10 +13,14 @@
 #include <common/debug.h>
 
 static const interrupt_prop_t g0_interrupt_props[] = {
-	INTR_PROP_DESC(FIQ_SMP_CALL_SGI, PLAT_WD2_PRI,
+	INTR_PROP_DESC(FIQ_SMP_CALL_SGI, PLAT_WDG_PRI,
 			GICV2_INTR_GROUP0, GIC_INTR_CFG_EDGE),
-	/* WD2 pre-timeout is handled by the same EL3 dispatcher as the stop SGI. */
-	INTR_PROP_DESC(NPCM845X_WDG_INT2, PLAT_WD2_PRI,
+	/* All watchdog pre-timeout interrupts share the same EL3 dispatcher. */
+	INTR_PROP_DESC(NPCM845X_WDG_INT0, PLAT_WDG_PRI,
+			GICV2_INTR_GROUP0, GIC_INTR_CFG_LEVEL),
+	INTR_PROP_DESC(NPCM845X_WDG_INT1, PLAT_WDG_PRI,
+			GICV2_INTR_GROUP0, GIC_INTR_CFG_LEVEL),
+	INTR_PROP_DESC(NPCM845X_WDG_INT2, PLAT_WDG_PRI,
 			GICV2_INTR_GROUP0, GIC_INTR_CFG_LEVEL),
 };
 

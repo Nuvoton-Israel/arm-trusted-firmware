@@ -98,6 +98,18 @@
 #define FIQ_SMP_CALL_SGI 10
 
 /*
+ * WD0 pre-timeout FIQ: GIC interrupt #47 -> ARM A35 INTID 79
+ * (Timer Module 0 watchdog, fires 1024 prescale clocks before WD reset)
+ */
+#define NPCM845X_WDG_INT0 79U
+
+/*
+ * WD1 pre-timeout FIQ: GIC interrupt #48 -> ARM A35 INTID 80
+ * (Timer Module 1 watchdog, fires 1024 prescale clocks before WD reset)
+ */
+#define NPCM845X_WDG_INT1 80U
+
+/*
  * WD2 pre-timeout FIQ: GIC interrupt #49 → ARM A35 INTID 81
  * (Timer Module 2 watchdog, fires 1024 prescale clocks before WD reset)
  */
@@ -106,10 +118,10 @@
 /* NPCM845x uses 3 upper secure priority bits for EHF dispatching. */
 #define PLAT_PRI_BITS U(3)
 
-/* EHF priority used by the WD2 firmware-first dispatcher and reset SGI. */
-#define PLAT_WD2_PRI U(0x20)
+/* EHF priority used by the watchdog firmware-first dispatcher and reset SGI. */
+#define PLAT_WDG_PRI U(0x20)
 
-#define PLAT_EHF_DESC EHF_PRI_DESC(PLAT_PRI_BITS, PLAT_WD2_PRI)
+#define PLAT_EHF_DESC EHF_PRI_DESC(PLAT_PRI_BITS, PLAT_WDG_PRI)
 
 /* (0x00040000) 128  KB, the rest 128K if it is non secured */
 #define PLAT_ARM_TRUSTED_SRAM_SIZE UL(0x00020000)
