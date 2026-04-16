@@ -13,6 +13,8 @@ SPMD_SPM_AT_SEL2	:= 0
 #temporary until the RAM size is reduced
 USE_COHERENT_MEM	:=	1
 INIT_UNUSED_NS_EL2  := 1
+SPD	:= opteed
+EL3_EXCEPTION_HANDLING	:= 1
 
 
 $(eval $(call add_define,RESET_TO_BL31))
@@ -185,7 +187,10 @@ ifeq (${ARCH}, aarch64)
 PLAT_INCLUDES	+=	-Iinclude/plat/arm/common/aarch64
 endif
 
-# Include GICv3 driver files
+# Route GICv2 Group 0 interrupts to EL3 as FIQ
+GICV2_G0_FOR_EL3	:=	1
+
+# Include GICv2 driver files
 include drivers/arm/gic/v2/gicv2.mk
 
 NPCM850_GIC_SOURCES	:=	${GICV2_SOURCES}
@@ -301,7 +306,7 @@ endif
 endif
 
 ifeq (${EL3_EXCEPTION_HANDLING},1)
-BL31_SOURCES	+=	plat/arm/common/aarch64/arm_ehf.c
+BL31_SOURCES	+=	plat/common/aarch64/plat_ehf.c
 endif
 
 ifeq (${SDEI_SUPPORT},1)
@@ -383,10 +388,6 @@ ifeq (${MEASURED_BOOT},1)
 MEASURED_BOOT_MK := drivers/measured_boot/measured_boot.mk
 $(info Including ${MEASURED_BOOT_MK})
 include ${MEASURED_BOOT_MK}
-endif
-
-ifeq (${EL3_EXCEPTION_HANDLING},1)
-BL31_SOURCES	+=	plat/arm/common/aarch64/arm_ehf.c
 endif
 
 BL1_SOURCES	:=

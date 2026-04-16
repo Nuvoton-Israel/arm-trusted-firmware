@@ -272,6 +272,9 @@ void bl31_platform_setup(void)
 	plat_gic_driver_init();
 	plat_gic_init();
 
+/* Register the WD2 firmware-first dispatcher and reset-quiesce SGI. */
+	npcm845x_wd2_ehf_setup();
+
 #if RESET_TO_BL31
 #if defined(PLAT_ARM_MEM_PROT_ADDR)
 	arm_nor_psci_do_dyn_mem_protect();

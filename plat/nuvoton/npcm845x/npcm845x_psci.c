@@ -11,17 +11,83 @@
 
 #include <arch.h>
 #include <arch_helpers.h>
+#include <bl31/ehf.h>
+#include <bl31/interrupt_mgmt.h>
 #include <common/debug.h>
 #include <drivers/arm/gicv2.h>
 #include <lib/mmio.h>
 #include <lib/psci/psci.h>
 #include <lib/semihosting.h>
+#include <lib/spinlock.h>
 #include <npcm845x_clock.h>
 #include <plat/arm/common/plat_arm.h>
 #include <plat/common/platform.h>
 #include <plat_npcm845x.h>
+#include <platform_def.h>
 
 #define ADP_STOPPED_APPLICATION_EXIT 0x20026
+
+/*
+ * State for quiescing secondary CPUs before system reset.
+ * Each CPU sets its bit in cpus_stopped when it enters the stop handler.
+ * The resetting CPU polls this value to know all others are parked.
+ */
+static volatile uint32_t cpus_stopped;
+static volatile uint32_t online_cpus = (U(1) << PLAT_PRIMARY_CPU);
+static spinlock_t reset_lock;
+
+static bool npcm845x_is_watchdog_pretimeout_irq(unsigned int irq)
+{
+	return (irq == NPCM845X_WDG_INT0) ||
+		(irq == NPCM845X_WDG_INT1) ||
+		(irq == NPCM845X_WDG_INT2);
+}
+
+static u_register_t npcm845x_core_pos_to_mpidr(unsigned int core_pos)
+{
+	assert(core_pos < PLATFORM_CORE_COUNT);
+	assert(core_pos < PLATFORM_MAX_CPU_PER_CLUSTER);
+
+	return (u_register_t)(core_pos << MPIDR_AFF0_SHIFT);
+}
+
+static void npcm845x_mark_cpu_online(unsigned int cpu_id)
+{
+	spin_lock(&reset_lock);
+	online_cpus |= (U(1) << cpu_id);
+	cpus_stopped &= ~(U(1) << cpu_id);
+	spin_unlock(&reset_lock);
+}
+
+static void npcm845x_mark_cpu_offline(unsigned int cpu_id)
+{
+	spin_lock(&reset_lock);
+	online_cpus &= ~(U(1) << cpu_id);
+	cpus_stopped &= ~(U(1) << cpu_id);
+	spin_unlock(&reset_lock);
+}
+
+static uint32_t npcm845x_prepare_stop_targets(unsigned int cpu_id)
+{
+	uint32_t targets;
+
+	spin_lock(&reset_lock);
+	targets = online_cpus & ~(U(1) << cpu_id);
+	cpus_stopped &= ~targets;
+	spin_unlock(&reset_lock);
+
+	return targets;
+}
+
+static void npcm845x_raise_stop_sgis(uint32_t targets)
+{
+	for (unsigned int i = 0; i < PLATFORM_CORE_COUNT; i++) {
+		if ((targets & (U(1) << i)) != 0U) {
+			plat_ic_raise_el3_sgi(FIQ_SMP_CALL_SGI,
+					      npcm845x_core_pos_to_mpidr(i));
+		}
+	}
+}
 
 /* Make composite power state parameter till power level 0 */
 #if PSCI_EXTENDED_STATE_ID
@@ -170,6 +236,7 @@ void npcm845x_pwr_domain_suspend(const psci_power_state_t *target_state)
 			__func__, i, target_state->pwr_domain_state[i]);
 	}
 
+	npcm845x_mark_cpu_offline(plat_my_core_pos());
 	gicv2_cpuif_disable();
 
 	NOTICE("%s() Out of suspend\n", __func__);
@@ -193,8 +260,9 @@ void npcm845x_pwr_domain_on_finish(const psci_power_state_t *target_state)
 	assert(target_state->pwr_domain_state[MPIDR_AFFLVL0] ==
 			PLAT_LOCAL_STATE_OFF);
 
-	gicv2_pcpu_distif_init();
+	plat_gic_pcpu_init();
 	gicv2_cpuif_enable();
+	npcm845x_mark_cpu_online(plat_my_core_pos());
 }
 
 
@@ -215,19 +283,110 @@ void npcm845x_pwr_domain_suspend_finish(const psci_power_state_t *target_state)
 	assert(target_state->pwr_domain_state[MPIDR_AFFLVL0] ==
 			PLAT_LOCAL_STATE_OFF);
 
-	gicv2_pcpu_distif_init();
+	plat_gic_pcpu_init();
 	gicv2_cpuif_enable();
+	npcm845x_mark_cpu_online(plat_my_core_pos());
 }
 
+
+/*
+ * EL3 interrupt handler invoked on secondary CPUs when a system reset
+ * is requested.  The CPU acknowledges the SGI, signals that it has
+ * stopped, and parks in WFI so that no further memory accesses are
+ * generated before the SWRST1 fires.
+ */
+static int npcm845x_wd2_ehf_handler(uint32_t intr_raw, uint32_t flags,
+				    void *handle, void *cookie)
+{
+	unsigned int cpu_id = plat_my_core_pos();
+	unsigned int irq = plat_ic_get_interrupt_id(intr_raw);
+
+	(void)flags;
+	(void)handle;
+	(void)cookie;
+
+	if (irq == INTR_ID_UNAVAILABLE) {
+		return 0;
+	}
+
+	/*
+	 * If this is a watchdog pre-timeout FIQ (fires 1024 prescale clocks
+	 * before the watchdog reset), send stop SGIs to all other CPUs so they
+	 * quiesce before the watchdog fires.
+	 */
+	if (npcm845x_is_watchdog_pretimeout_irq(irq)) {
+		uint32_t all_stopped = npcm845x_prepare_stop_targets(cpu_id);
+
+		/* Send stop SGI to every other online CPU */
+		npcm845x_raise_stop_sgis(all_stopped);
+
+		/* Wait until all other online CPUs have parked */
+		while ((cpus_stopped & all_stopped) != all_stopped) {
+			;
+		}
+	} else if (irq == FIQ_SMP_CALL_SGI) {
+		//NOTICE("%s: CPU%u: stop SGI (irq=%u)\n", __func__, cpu_id, irq);
+	} else {
+		//ERROR("%s: CPU%u: unexpected EL3 interrupt (irq=%u)\n", __func__, cpu_id, irq);
+		panic();
+	}
+
+	/* Drain all outstanding memory transactions on this CPU */
+	dsbsy();
+	isb();
+
+	/* Signal that this CPU has stopped */
+	spin_lock(&reset_lock);
+	cpus_stopped |= (1U << cpu_id);
+	dsb();
+	spin_unlock(&reset_lock);
+
+	/* Complete the active EL3 interrupt before parking this CPU. */
+	plat_ic_end_of_interrupt(intr_raw);
+
+	/* Park forever -- never return to the non-secure world */
+	while (1) {
+		wfi();
+	}
+
+	/* Not reached */
+	return 0;
+}
+
+void npcm845x_wd2_ehf_setup(void)
+{
+	ehf_register_priority_handler(PLAT_WDG_PRI, npcm845x_wd2_ehf_handler);
+}
 
 void __dead2 npcm845x_system_reset(void)
 {
 	uintptr_t RESET_BASE_ADDR;
 	uint32_t val;
+	unsigned int my_cpu = plat_my_core_pos();
+	uint32_t all_stopped;
 
 	NOTICE("%s() nuvoton_psci\n", __func__);
 	console_flush();
 
+	dsbsy();
+	isb();
+
+	/*
+	 * Send an EL3 SGI to every other CPU so that they stop all
+	 * memory accesses and park in WFI before SWRST1 is triggered.
+	 */
+	all_stopped = npcm845x_prepare_stop_targets(my_cpu);
+	npcm845x_raise_stop_sgis(all_stopped);
+
+	/* Wait until every other online CPU has acknowledged and parked */
+	while ((cpus_stopped & all_stopped) != all_stopped) {
+		;
+	}
+
+	/*
+	 * All other CPUs are in WFI with no pending memory accesses.
+	 * Safe to trigger SW1 reset.
+	 */
 	dsbsy();
 	isb();
 
@@ -369,6 +528,7 @@ void npcm845x_pwr_domain_off(const psci_power_state_t *target_state)
 			__func__, i, target_state->pwr_domain_state[i]);
 	}
 
+	npcm845x_mark_cpu_offline(plat_my_core_pos());
 	plat_secondary_cold_boot_setup();
 }
 
