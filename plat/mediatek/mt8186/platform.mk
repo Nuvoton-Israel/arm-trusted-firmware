@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2023, MediaTek Inc. All rights reserved.
+# Copyright (c) 2021-2025, MediaTek Inc. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -7,7 +7,11 @@
 MTK_PLAT     := plat/mediatek
 MTK_PLAT_SOC := ${MTK_PLAT}/${PLAT}
 
+# True Random Number Generator firmware Interface
+TRNG_SUPPORT := 1
+
 PLAT_INCLUDES := -I${MTK_PLAT}/common/                            \
+                 -I${MTK_PLAT}/common/include                     \
                  -I${MTK_PLAT}/drivers/cirq/                      \
                  -I${MTK_PLAT}/drivers/gic600/                    \
                  -I${MTK_PLAT}/drivers/gpio/                      \
@@ -78,6 +82,11 @@ BL31_SOURCES += common/desc_image_load.c                              \
                 ${MTK_PLAT_SOC}/plat_pm.c                             \
                 ${MTK_PLAT_SOC}/plat_sip_calls.c                      \
                 ${MTK_PLAT_SOC}/plat_topology.c
+
+ifeq (${TRNG_SUPPORT},1)
+BL31_SOURCES += ${MTK_PLAT}/drivers/rng/rng.c                         \
+                ${MTK_PLAT}/drivers/rng/${PLAT}/rng_plat.c
+endif
 
 # Build SPM drivers
 include ${MTK_PLAT_SOC}/drivers/spm/build.mk

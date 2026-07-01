@@ -130,15 +130,15 @@ else
     $(BUILD_PLAT)/bl2/nxp_rotpk.o: $(ROTPK_HASH)
 
     certificates: $(ROT_KEY)
-    $(ROT_KEY): | $(BUILD_PLAT)
-	@echo "  OPENSSL $@"
-	@if [ ! -f $(ROT_KEY) ]; then \
+    $(ROT_KEY): | $$(@D)/
+	$(s)echo "  OPENSSL $@"
+	$(q)if [ ! -f $(ROT_KEY) ]; then \
 		${OPENSSL_BIN_PATH}/openssl genrsa 2048 > $@ 2>/dev/null; \
 	fi
 
-    $(ROTPK_HASH): $(ROT_KEY)
-	@echo "  OPENSSL $@"
-	$(Q)${OPENSSL_BIN_PATH}/openssl rsa -in $< -pubout -outform DER 2>/dev/null |\
+    $(ROTPK_HASH): $(ROT_KEY) | $$(@D)/
+	$(s)echo "  OPENSSL $@"
+	$(q)${OPENSSL_BIN_PATH}/openssl rsa -in $< -pubout -outform DER 2>/dev/null |\
 	${OPENSSL_BIN_PATH}/openssl dgst -sha256 -binary > $@ 2>/dev/null
 
 endif #MBEDTLS_DIR
@@ -146,9 +146,11 @@ endif #MBEDTLS_DIR
 PLAT_INCLUDES		+=	-Iinclude/common/tbbr
 
 # Generic files for authentication framework
-TBBR_SOURCES		+=	drivers/auth/auth_mod.c		\
-				drivers/auth/crypto_mod.c	\
-				drivers/auth/img_parser_mod.c	\
+AUTH_MK := drivers/auth/auth.mk
+$(info Including ${AUTH_MK})
+include ${AUTH_MK}
+
+TBBR_SOURCES		+=	${AUTH_SOURCES}			\
 				plat/common/tbbr/plat_tbbr.c	\
 				${PLAT_TBBR_SOURCES}
 

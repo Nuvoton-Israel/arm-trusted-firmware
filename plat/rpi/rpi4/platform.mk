@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2013-2024, Arm Limited and Contributors. All rights reserved.
+# Copyright (c) 2013-2025, Arm Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -31,6 +31,7 @@ BL31_SOURCES		+=	lib/cpus/aarch64/cortex_a72.S		\
 				plat/common/plat_psci_common.c		\
 				plat/rpi/common/rpi3_topology.c		\
 				common/fdt_fixup.c			\
+				common/fdt_wrappers.c			\
 				${LIBFDT_SRCS}				\
 				${GICV2_SOURCES}
 
@@ -50,7 +51,7 @@ else
 endif
 
 # Add support for platform supplied linker script for BL31 build
-$(eval $(call add_define,PLAT_EXTRA_LD_SCRIPT))
+PLAT_EXTRA_LD_SCRIPT	:=	1
 
 # Enable all errata workarounds for Cortex-A72
 ERRATA_A72_859971		:= 1
@@ -113,5 +114,5 @@ PLAT_BL_COMMON_SOURCES	+=	drivers/rpi3/rng/rpi3_rng.c		\
 endif
 
 ifeq ($(SMC_PCI_SUPPORT), 1)
-BL31_SOURCES            +=      plat/rpi/rpi4/rpi4_pci_svc.c
+BL31_SOURCES            +=      plat/rpi/common/rpi_pci_svc.c
 endif

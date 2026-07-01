@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2021, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2017-2025, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -62,10 +62,8 @@
 #define OSH			(U(0x2) << 6)
 #define ISH			(U(0x3) << 6)
 
-#ifdef __aarch64__
 /* Guarded Page bit */
 #define GP			(ULL(1) << 50)
-#endif
 
 #define TABLE_ADDR_MASK		ULL(0x0000FFFFFFFFF000)
 
@@ -150,8 +148,8 @@
 
 /* Normal Memory, Outer Write-Through non-transient, Inner Non-cacheable */
 #define ATTR_NON_CACHEABLE		MAKE_MAIR_NORMAL_MEMORY(MAIR_NORM_NC, MAIR_NORM_NC)
-/* Device-nGnRE */
-#define ATTR_DEVICE			MAIR_DEV_nGnRE
+/* Device-nGnRnE */
+#define ATTR_DEVICE			MAIR_DEV_nGnRnE
 /* Normal Memory, Outer Write-Back non-transient, Inner Write-Back non-transient */
 #define ATTR_IWBWA_OWBWA_NTR		MAKE_MAIR_NORMAL_MEMORY(MAIR_NORM_WB_NTR_RWA, MAIR_NORM_WB_NTR_RWA)
 #define MAIR_ATTR_SET(attr, index)	((attr) << ((index) << 3))
@@ -171,8 +169,10 @@
 #define SHAREABILITY_SHIFT		8
 /* The Access Flag, AF. */
 #define ACCESS_FLAG_SHIFT		10
-/* The not global bit, nG. */
+/* The not global bit, nG */
 #define NOT_GLOBAL_SHIFT		11
+/* The Non-secure Extension bit, NSE */
+#define NSE_SHIFT			11
 /* Contiguous hint bit. */
 #define CONT_HINT_SHIFT			52
 /* Execute-never bits, XN. */

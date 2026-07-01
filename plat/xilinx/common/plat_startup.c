@@ -72,11 +72,13 @@
  * Return: XBL_FLAGS_A53_0, XBL_FLAGS_A53_1, XBL_FLAGS_A53_2 or XBL_FLAGS_A53_3.
  *
  */
-static int32_t get_xbl_cpu(const struct xbl_partition *partition)
+static uint32_t get_xbl_cpu(const struct xbl_partition *partition)
 {
 	uint64_t flags = partition->flags & XBL_FLAGS_CPU_MASK;
 
-	return flags >> XBL_FLAGS_CPU_SHIFT;
+	flags >>= XBL_FLAGS_CPU_SHIFT;
+
+	return (uint32_t)flags;
 }
 
 /**
@@ -86,11 +88,13 @@ static int32_t get_xbl_cpu(const struct xbl_partition *partition)
  * Return: XBL_FLAGS_EL0, XBL_FLAGS_EL1, XBL_FLAGS_EL2 or XBL_FLAGS_EL3.
  *
  */
-static int32_t get_xbl_el(const struct xbl_partition *partition)
+static uint32_t get_xbl_el(const struct xbl_partition *partition)
 {
 	uint64_t flags = partition->flags & XBL_FLAGS_EL_MASK;
 
-	return flags >> XBL_FLAGS_EL_SHIFT;
+	flags >>= XBL_FLAGS_EL_SHIFT;
+
+	return (uint32_t)flags;
 }
 
 /**
@@ -100,11 +104,13 @@ static int32_t get_xbl_el(const struct xbl_partition *partition)
  * Return: XBL_FLAGS_NON_SECURE or XBL_FLAGS_SECURE.
  *
  */
-static int32_t get_xbl_ss(const struct xbl_partition *partition)
+static uint32_t get_xbl_ss(const struct xbl_partition *partition)
 {
 	uint64_t flags = partition->flags & XBL_FLAGS_TZ_MASK;
 
-	return flags >> XBL_FLAGS_TZ_SHIFT;
+	flags >>= XBL_FLAGS_TZ_SHIFT;
+
+	return (uint32_t)flags;
 }
 
 /**
@@ -114,17 +120,20 @@ static int32_t get_xbl_ss(const struct xbl_partition *partition)
  * Return: SPSR_E_LITTLE or SPSR_E_BIG.
  *
  */
-static int32_t get_xbl_endian(const struct xbl_partition *partition)
+static uint32_t get_xbl_endian(const struct xbl_partition *partition)
 {
 	uint64_t flags = partition->flags & XBL_FLAGS_ENDIAN_MASK;
+	uint32_t spsr_value = 0U;
 
 	flags >>= XBL_FLAGS_ENDIAN_SHIFT;
 
 	if (flags == XBL_FLAGS_ENDIAN_BE) {
-		return SPSR_E_BIG;
+		spsr_value = SPSR_E_BIG;
 	} else {
-		return SPSR_E_LITTLE;
+		spsr_value = SPSR_E_LITTLE;
 	}
+
+	return spsr_value;
 }
 
 /**
@@ -134,11 +143,13 @@ static int32_t get_xbl_endian(const struct xbl_partition *partition)
  * Return: XBL_FLAGS_ESTATE_A32 or XBL_FLAGS_ESTATE_A64.
  *
  */
-static int32_t get_xbl_estate(const struct xbl_partition *partition)
+static uint32_t get_xbl_estate(const struct xbl_partition *partition)
 {
 	uint64_t flags = partition->flags & XBL_FLAGS_ESTATE_MASK;
 
-	return flags >> XBL_FLAGS_ESTATE_SHIFT;
+	flags >>= XBL_FLAGS_ESTATE_SHIFT;
+
+	return (uint32_t)flags;
 }
 
 #if defined(PLAT_versal_net)
@@ -148,11 +159,11 @@ static int32_t get_xbl_estate(const struct xbl_partition *partition)
  *
  * Return: cluster number for the partition.
  */
-static int32_t get_xbl_cluster(const struct xbl_partition *partition)
+static uint32_t get_xbl_cluster(const struct xbl_partition *partition)
 {
 	uint64_t flags = partition->flags & XBL_FLAGS_CLUSTER_MASK;
 
-	return (int32_t)(flags >> XBL_FLAGS_CLUSTER_SHIFT);
+	return (flags >> XBL_FLAGS_CLUSTER_SHIFT);
 }
 #endif /* PLAT_versal_net */
 
@@ -174,19 +185,22 @@ enum xbl_handoff xbl_handover(entry_point_info_t *bl32,
 					uint64_t handoff_addr)
 {
 	const struct xbl_handoff_params *HandoffParams;
+	enum xbl_handoff xbl_status = XBL_HANDOFF_SUCCESS;
 
-	if (!handoff_addr) {
+	if (handoff_addr == 0U) {
 		WARN("BL31: No handoff structure passed\n");
-		return XBL_HANDOFF_NO_STRUCT;
+		xbl_status = XBL_HANDOFF_NO_STRUCT;
+		goto exit_label;
 	}
 
 	HandoffParams = (struct xbl_handoff_params *)handoff_addr;
-	if ((HandoffParams->magic[0] != 'X') ||
-	    (HandoffParams->magic[1] != 'L') ||
-	    (HandoffParams->magic[2] != 'N') ||
-	    (HandoffParams->magic[3] != 'X')) {
+	if ((HandoffParams->magic[0] != (uint8_t)'X') ||
+	    (HandoffParams->magic[1] != (uint8_t)'L') ||
+	    (HandoffParams->magic[2] != (uint8_t)'N') ||
+	    (HandoffParams->magic[3] != (uint8_t)'X')) {
 		ERROR("BL31: invalid handoff structure at %" PRIx64 "\n", handoff_addr);
-		return XBL_HANDOFF_INVAL_STRUCT;
+		xbl_status = XBL_HANDOFF_INVAL_STRUCT;
+		goto exit_label;
 	}
 
 	VERBOSE("BL31: TF-A handoff params at:0x%" PRIx64 ", entries:%u\n",
@@ -194,7 +208,8 @@ enum xbl_handoff xbl_handover(entry_point_info_t *bl32,
 	if (HandoffParams->num_entries > XBL_MAX_PARTITIONS) {
 		ERROR("BL31: TF-A handoff params: too many partitions (%u/%u)\n",
 		      HandoffParams->num_entries, XBL_MAX_PARTITIONS);
-		return XBL_HANDOFF_TOO_MANY_PARTS;
+		xbl_status = XBL_HANDOFF_TOO_MANY_PARTS;
+		goto exit_label;
 	}
 
 	/*
@@ -204,7 +219,7 @@ enum xbl_handoff xbl_handover(entry_point_info_t *bl32,
 	 */
 	for (size_t i = 0; i < HandoffParams->num_entries; i++) {
 		entry_point_info_t *image;
-		int32_t target_estate, target_secure, target_cpu;
+		uint32_t target_estate, target_secure, target_cpu;
 		uint32_t target_endianness, target_el;
 
 		VERBOSE("BL31: %zd: entry:0x%" PRIx64 ", flags:0x%" PRIx64 "\n", i,
@@ -237,8 +252,8 @@ enum xbl_handoff xbl_handover(entry_point_info_t *bl32,
 		}
 
 		target_secure = get_xbl_ss(&HandoffParams->partition[i]);
-		if (target_secure == XBL_FLAGS_SECURE &&
-		    target_el == XBL_FLAGS_EL2) {
+		if ((target_secure == XBL_FLAGS_SECURE) &&
+		    (target_el == XBL_FLAGS_EL2)) {
 			WARN("BL31: invalid security state (%i) for exception level (%i)\n",
 			     target_secure, target_el);
 			continue;
@@ -251,12 +266,12 @@ enum xbl_handoff xbl_handover(entry_point_info_t *bl32,
 			image = bl32;
 
 			if (target_estate == XBL_FLAGS_ESTATE_A32) {
-				bl32->spsr = SPSR_MODE32(MODE32_svc, SPSR_T_ARM,
-							 target_endianness,
+				bl32->spsr = (uint32_t)SPSR_MODE32(MODE32_svc, SPSR_T_ARM,
+							 (uint64_t)target_endianness,
 							 DISABLE_ALL_EXCEPTIONS);
 			} else {
-				bl32->spsr = SPSR_64(MODE_EL1, MODE_SP_ELX,
-						     DISABLE_ALL_EXCEPTIONS);
+				bl32->spsr = (uint32_t)SPSR_64(MODE_EL1, MODE_SP_ELX,
+							DISABLE_ALL_EXCEPTIONS);
 			}
 		} else {
 			image = bl33;
@@ -268,8 +283,8 @@ enum xbl_handoff xbl_handover(entry_point_info_t *bl32,
 					target_el = MODE32_sys;
 				}
 
-				bl33->spsr = SPSR_MODE32(target_el, SPSR_T_ARM,
-							 target_endianness,
+				bl33->spsr = (uint32_t)SPSR_MODE32((uint64_t)target_el, SPSR_T_ARM,
+							 (uint64_t)target_endianness,
 							 DISABLE_ALL_EXCEPTIONS);
 			} else {
 				if (target_el == XBL_FLAGS_EL2) {
@@ -278,13 +293,13 @@ enum xbl_handoff xbl_handover(entry_point_info_t *bl32,
 					target_el = MODE_EL1;
 				}
 
-				bl33->spsr = SPSR_64(target_el, MODE_SP_ELX,
-						     DISABLE_ALL_EXCEPTIONS);
+				bl33->spsr = (uint32_t)SPSR_64((uint64_t)target_el, MODE_SP_ELX,
+							DISABLE_ALL_EXCEPTIONS);
 			}
 		}
 
 		VERBOSE("Setting up %s entry point to:%" PRIx64 ", el:%x\n",
-			target_secure == XBL_FLAGS_SECURE ? "BL32" : "BL33",
+			(target_secure == XBL_FLAGS_SECURE) ? "BL32" : "BL33",
 			HandoffParams->partition[i].entry_point,
 			target_el);
 		image->pc = HandoffParams->partition[i].entry_point;
@@ -296,5 +311,6 @@ enum xbl_handoff xbl_handover(entry_point_info_t *bl32,
 		}
 	}
 
-	return XBL_HANDOFF_SUCCESS;
+exit_label:
+	return xbl_status;
 }

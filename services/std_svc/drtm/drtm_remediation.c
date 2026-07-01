@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Arm Limited. All rights reserved.
+ * Copyright (c) 2022-2025 Arm Limited. All rights reserved.
  *
  * SPDX-License-Identifier:    BSD-3-Clause
  *
@@ -21,7 +21,7 @@ uint64_t drtm_set_error(uint64_t x1, void *ctx)
 	rc = plat_set_drtm_error(x1);
 
 	if (rc != 0) {
-		SMC_RET1(ctx, INTERNAL_ERROR);
+		SMC_RET1(ctx, NOT_FOUND);
 	}
 
 	SMC_RET1(ctx, SUCCESS);
@@ -35,7 +35,7 @@ uint64_t drtm_get_error(void *ctx)
 	rc = plat_get_drtm_error(&error_code);
 
 	if (rc != 0) {
-		SMC_RET1(ctx, INTERNAL_ERROR);
+		SMC_RET1(ctx, NOT_FOUND);
 	}
 
 	SMC_RET2(ctx, SUCCESS, error_code);
@@ -55,5 +55,5 @@ void drtm_enter_remediation(uint64_t err_code, const char *err_str)
 	       err_code, err_str);
 
 	ERROR("%s(): system reset is not yet supported\n", __func__);
-	plat_system_reset();
+	panic();
 }

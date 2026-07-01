@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2021, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2017-2025, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -13,6 +13,7 @@
 
 #include <platform_def.h>
 
+#include <arch_features.h>
 #include <arch_helpers.h>
 #include <common/debug.h>
 #include <lib/utils_def.h>
@@ -278,7 +279,7 @@ void xlat_tables_print(xlat_ctx_t *ctx)
  *   Size in bytes of the virtual address space.
  */
 static uint64_t *find_xlat_table_entry(uintptr_t virtual_addr,
-				       void *xlat_table_base,
+				       uint64_t *xlat_table_base,
 				       unsigned int xlat_table_base_entries,
 				       unsigned long long virt_addr_space_size,
 				       unsigned int *out_level)
@@ -419,10 +420,59 @@ static int xlat_get_mem_attributes_internal(const xlat_ctx_t *ctx,
 			*attributes |= MT_USER;
 	}
 
-	uint64_t ns_bit = (desc >> NS_SHIFT) & 1U;
+	uint64_t ns_bit = (desc >> NS_SHIFT) & 1ULL;
 
-	if (ns_bit == 1U)
+#if ENABLE_RME
+	uint64_t nse_bit = (desc >> NSE_SHIFT) & 1ULL;
+	uint32_t sec_state = (uint32_t)(ns_bit | (nse_bit << 1ULL));
+
+/*
+ * =========================================================
+ *  NSE    NS  |  Output PA space
+ * =========================================================
+ *    0    0   |  Secure (if S-EL2 is present, else invalid)
+ *    0    1   |  Non-secure
+ *    1    0   |  Root
+ *    1    1   |  Realm
+ *==========================================================
+ */
+	switch (sec_state) {
+	case 0U:
+		/*
+		 * We expect to get Secure mapping on an RME system only if
+		 * S-EL2 is enabled.
+		 * Hence panic() if we hit the case without EEL2 being enabled.
+		 */
+		if ((read_scr_el3() & SCR_EEL2_BIT) == 0ULL) {
+			ERROR("A secure descriptor is not supported when"
+			      "FEAT_RME is implemented and FEAT_SEL2 is"
+			      "not enabled\n");
+			panic();
+		} else {
+			*attributes |= MT_SECURE;
+		}
+		break;
+	case 1U:
 		*attributes |= MT_NS;
+		break;
+	case 2U:
+		*attributes |= MT_ROOT;
+		break;
+	case 3U:
+		*attributes |= MT_REALM;
+		break;
+	default:
+		/* unreachable code */
+		assert(false);
+		break;
+	}
+#else /* !ENABLE_RME */
+	if (ns_bit == 1ULL) {
+		*attributes |= MT_NS;
+	} else {
+		*attributes |= MT_SECURE;
+	}
+#endif /* ENABLE_RME */
 
 	uint64_t xn_mask = xlat_arch_regime_get_xn_desc(ctx->xlat_regime);
 
@@ -437,10 +487,10 @@ static int xlat_get_mem_attributes_internal(const xlat_ctx_t *ctx,
 
 
 int xlat_get_mem_attributes_ctx(const xlat_ctx_t *ctx, uintptr_t base_va,
-				uint32_t *attr)
+				uint32_t *attr, unsigned int *table_level)
 {
 	return xlat_get_mem_attributes_internal(ctx, base_va, attr,
-				NULL, NULL, NULL);
+				NULL, NULL, table_level);
 }
 
 

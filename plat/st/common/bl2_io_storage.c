@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2023, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2015-2025, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -34,7 +34,6 @@
 #include <lib/utils.h>
 #include <plat/common/platform.h>
 #include <tools_share/firmware_image_package.h>
-
 #include <platform_def.h>
 #include <stm32cubeprogrammer.h>
 #include <stm32mp_efi.h>
@@ -47,6 +46,7 @@ uintptr_t fip_dev_handle;
 uintptr_t storage_dev_handle;
 
 static const io_dev_connector_t *fip_dev_con;
+static uint32_t nand_block_sz __maybe_unused;
 
 #ifndef DECRYPTION_SUPPORT_none
 static const io_dev_connector_t *enc_dev_con;
@@ -310,10 +310,54 @@ static void boot_spi_nor(boot_api_context_t *boot_context)
 }
 #endif /* STM32MP_SPI_NOR */
 
+#if STM32MP_RAW_NAND || STM32MP_SPI_NAND
+/*
+ * This function returns 0 if it can find an alternate
+ * image to be loaded or a negative errno otherwise.
+ */
+static int try_nand_backup_partitions(unsigned int image_id)
+{
+	static unsigned int backup_id;
+	static unsigned int backup_block_nb;
+
+	/* Check if NAND storage used */
+	if (nand_block_sz == 0U) {
+		return -ENODEV;
+	}
+
+	if (backup_id != image_id) {
+		backup_block_nb = PLATFORM_MTD_MAX_PART_SIZE / nand_block_sz;
+		backup_id = image_id;
+	}
+
+	if (backup_block_nb-- == 0U) {
+		return -ENOSPC;
+	}
+
+#if PSA_FWU_SUPPORT
+	if (((image_block_spec.offset < STM32MP_NAND_FIP_B_OFFSET) &&
+	     ((image_block_spec.offset + nand_block_sz) >= STM32MP_NAND_FIP_B_OFFSET)) ||
+	    (image_block_spec.offset + nand_block_sz >= STM32MP_NAND_FIP_B_MAX_OFFSET)) {
+		return 0;
+	}
+#endif
+
+	image_block_spec.offset += nand_block_sz;
+
+	return 0;
+}
+
+static const struct plat_try_images_ops try_img_ops = {
+	.next_instance = try_nand_backup_partitions,
+};
+#endif /* STM32MP_RAW_NAND || STM32MP_SPI_NAND */
+
 #if STM32MP_RAW_NAND
 static void boot_fmc2_nand(boot_api_context_t *boot_context)
 {
 	int io_result __maybe_unused;
+
+	plat_setup_try_img_ops(&try_img_ops);
 
 	io_result = stm32_fmc2_init();
 	assert(io_result == 0);
@@ -326,6 +370,8 @@ static void boot_fmc2_nand(boot_api_context_t *boot_context)
 	io_result = io_dev_open(nand_dev_con, (uintptr_t)&nand_dev_spec,
 				&storage_dev_handle);
 	assert(io_result == 0);
+
+	nand_block_sz = nand_dev_spec.erase_size;
 }
 #endif /* STM32MP_RAW_NAND */
 
@@ -333,6 +379,8 @@ static void boot_fmc2_nand(boot_api_context_t *boot_context)
 static void boot_spi_nand(boot_api_context_t *boot_context)
 {
 	int io_result __maybe_unused;
+
+	plat_setup_try_img_ops(&try_img_ops);
 
 	io_result = stm32_qspi_init();
 	assert(io_result == 0);
@@ -345,6 +393,8 @@ static void boot_spi_nand(boot_api_context_t *boot_context)
 				(uintptr_t)&spi_nand_dev_spec,
 				&storage_dev_handle);
 	assert(io_result == 0);
+
+	nand_block_sz = spi_nand_dev_spec.erase_size;
 }
 #endif /* STM32MP_SPI_NAND */
 
@@ -362,7 +412,7 @@ static void mmap_io_setup(void)
 }
 
 #if STM32MP_UART_PROGRAMMER
-static void stm32cubeprogrammer_uart(void)
+static void stm32cubeprogrammer_uart(uint8_t phase, uintptr_t base, size_t len)
 {
 	int ret __maybe_unused;
 	boot_api_context_t *boot_context =
@@ -370,21 +420,23 @@ static void stm32cubeprogrammer_uart(void)
 	uintptr_t uart_base;
 
 	uart_base = get_uart_address(boot_context->boot_interface_instance);
-	ret = stm32cubeprog_uart_load(uart_base, DWL_BUFFER_BASE, DWL_BUFFER_SIZE);
+	ret = stm32cubeprog_uart_load(uart_base, phase, base, len);
 	assert(ret == 0);
 }
 #endif
 
 #if STM32MP_USB_PROGRAMMER
-static void stm32cubeprogrammer_usb(void)
+static void stm32cubeprogrammer_usb(uint8_t phase, uintptr_t base, size_t len)
 {
 	int ret __maybe_unused;
-	struct usb_handle *pdev;
+	static struct usb_handle *pdev;
 
 	/* Init USB on platform */
-	pdev = usb_dfu_plat_init();
+	if (pdev == NULL) {
+		pdev = usb_dfu_plat_init();
+	}
 
-	ret = stm32cubeprog_usb_load(pdev, DWL_BUFFER_BASE, DWL_BUFFER_SIZE);
+	ret = stm32cubeprog_usb_load(pdev, phase, base, len);
 	assert(ret == 0);
 }
 #endif
@@ -407,15 +459,13 @@ void stm32mp_io_setup(void)
 	io_result = register_io_dev_fip(&fip_dev_con);
 	assert(io_result == 0);
 
-	io_result = io_dev_open(fip_dev_con, (uintptr_t)NULL,
-				&fip_dev_handle);
+	io_result = io_dev_open(fip_dev_con, (uintptr_t)NULL, &fip_dev_handle);
 
 #ifndef DECRYPTION_SUPPORT_none
 	io_result = register_io_dev_enc(&enc_dev_con);
 	assert(io_result == 0);
 
-	io_result = io_dev_open(enc_dev_con, (uintptr_t)NULL,
-				&enc_dev_handle);
+	io_result = io_dev_open(enc_dev_con, (uintptr_t)NULL, &enc_dev_handle);
 	assert(io_result == 0);
 #endif
 
@@ -530,7 +580,14 @@ int bl2_plat_handle_pre_image_load(unsigned int image_id)
 #if STM32MP_SPI_NAND
 	case BOOT_API_CTX_BOOT_INTERFACE_SEL_FLASH_NAND_SPI:
 #endif
+/*
+ * With FWU Multi Bank feature enabled, the selection of
+ * the image to boot will be done by fwu_init calling the
+ * platform hook, plat_fwu_set_images_source.
+ */
+#if !PSA_FWU_SUPPORT
 		image_block_spec.offset = STM32MP_NAND_FIP_OFFSET;
+#endif
 		break;
 #endif
 
@@ -549,8 +606,19 @@ int bl2_plat_handle_pre_image_load(unsigned int image_id)
 
 #if STM32MP_UART_PROGRAMMER
 	case BOOT_API_CTX_BOOT_INTERFACE_SEL_SERIAL_UART:
+#if STM32MP_DDR_FIP_IO_STORAGE
+		if (image_id == DDR_FW_ID) {
+			stm32cubeprogrammer_uart(PHASE_DDR_FW,
+						 DWL_DDR_BUFFER_BASE,
+						 DWL_DDR_BUFFER_SIZE);
+			/* FIP loaded at DWL address */
+			image_block_spec.offset = DWL_DDR_BUFFER_BASE;
+			image_block_spec.length = DWL_DDR_BUFFER_SIZE;
+		}
+#endif
 		if (image_id == FW_CONFIG_ID) {
-			stm32cubeprogrammer_uart();
+			stm32cubeprogrammer_uart(PHASE_SSBL, DWL_BUFFER_BASE,
+						 DWL_BUFFER_SIZE);
 			/* FIP loaded at DWL address */
 			image_block_spec.offset = DWL_BUFFER_BASE;
 			image_block_spec.length = DWL_BUFFER_SIZE;
@@ -559,8 +627,19 @@ int bl2_plat_handle_pre_image_load(unsigned int image_id)
 #endif
 #if STM32MP_USB_PROGRAMMER
 	case BOOT_API_CTX_BOOT_INTERFACE_SEL_SERIAL_USB:
+#if STM32MP_DDR_FIP_IO_STORAGE
+		if (image_id == DDR_FW_ID) {
+			stm32cubeprogrammer_usb(PHASE_DDR_FW,
+						DWL_DDR_BUFFER_BASE,
+						DWL_DDR_BUFFER_SIZE);
+			/* FIP loaded at DWL address */
+			image_block_spec.offset = DWL_DDR_BUFFER_BASE;
+			image_block_spec.length = DWL_DDR_BUFFER_SIZE;
+		}
+#endif
 		if (image_id == FW_CONFIG_ID) {
-			stm32cubeprogrammer_usb();
+			stm32cubeprogrammer_usb(PHASE_SSBL, DWL_BUFFER_BASE,
+						DWL_BUFFER_SIZE);
 			/* FIP loaded at DWL address */
 			image_block_spec.offset = DWL_BUFFER_BASE;
 			image_block_spec.length = DWL_BUFFER_SIZE;
@@ -596,7 +675,7 @@ int plat_get_image_source(unsigned int image_id, uintptr_t *dev_handle,
 	return rc;
 }
 
-#if (STM32MP_SDMMC || STM32MP_EMMC || STM32MP_SPI_NOR) && PSA_FWU_SUPPORT
+#if PSA_FWU_SUPPORT
 /*
  * In each boot in non-trial mode, we set the BKP register to
  * FWU_MAX_TRIAL_REBOOT, and return the active_index from metadata.
@@ -635,7 +714,7 @@ uint32_t plat_fwu_get_boot_idx(void)
 			stm32_set_max_fwu_trial_boot_cnt();
 		} else {
 			ERROR("The active bank(%u) of the platform is in Invalid State.\n",
-				boot_idx);
+			      boot_idx);
 			boot_idx = fwu_get_alternate_boot_bank();
 			stm32_clear_fwu_trial_boot_cnt();
 		}
@@ -710,6 +789,19 @@ void plat_fwu_set_images_source(const struct fwu_metadata *metadata)
 			}
 			break;
 #endif
+#if (STM32MP_RAW_NAND || STM32MP_SPI_NAND)
+		case BOOT_API_CTX_BOOT_INTERFACE_SEL_FLASH_NAND_FMC:
+		case BOOT_API_CTX_BOOT_INTERFACE_SEL_FLASH_NAND_SPI:
+			if (guidcmp(img_guid, &STM32MP_NAND_FIP_A_GUID) == 0) {
+				image_spec->offset = STM32MP_NAND_FIP_A_OFFSET;
+			} else if (guidcmp(img_guid, &STM32MP_NAND_FIP_B_GUID) == 0) {
+				image_spec->offset = STM32MP_NAND_FIP_B_OFFSET;
+			} else {
+				ERROR("Invalid uuid mentioned in metadata\n");
+				panic();
+			}
+			break;
+#endif
 		default:
 			panic();
 			break;
@@ -717,9 +809,9 @@ void plat_fwu_set_images_source(const struct fwu_metadata *metadata)
 	}
 }
 
-static int plat_set_image_source(unsigned int image_id,
-				 uintptr_t *handle,
-				 uintptr_t *image_spec)
+static int set_metadata_image_source(unsigned int image_id,
+				     uintptr_t *handle,
+				     uintptr_t *image_spec)
 {
 	struct plat_io_policy *policy;
 	io_block_spec_t *spec __maybe_unused;
@@ -762,6 +854,19 @@ static int plat_set_image_source(unsigned int image_id,
 		spec->length = sizeof(struct fwu_metadata);
 		break;
 #endif
+
+#if (STM32MP_RAW_NAND || STM32MP_SPI_NAND)
+	case BOOT_API_CTX_BOOT_INTERFACE_SEL_FLASH_NAND_FMC:
+	case BOOT_API_CTX_BOOT_INTERFACE_SEL_FLASH_NAND_SPI:
+		if (image_id == FWU_METADATA_IMAGE_ID) {
+			spec->offset = STM32MP_NAND_METADATA1_OFFSET;
+		} else {
+			spec->offset = STM32MP_NAND_METADATA2_OFFSET;
+		}
+
+		spec->length = sizeof(struct fwu_metadata);
+		break;
+#endif
 	default:
 		panic();
 		break;
@@ -780,6 +885,6 @@ int plat_fwu_set_metadata_image_source(unsigned int image_id,
 	assert((image_id == FWU_METADATA_IMAGE_ID) ||
 	       (image_id == BKUP_FWU_METADATA_IMAGE_ID));
 
-	return plat_set_image_source(image_id, handle, image_spec);
+	return set_metadata_image_source(image_id, handle, image_spec);
 }
-#endif /* (STM32MP_SDMMC || STM32MP_EMMC || STM32MP_SPI_NOR) && PSA_FWU_SUPPORT */
+#endif /* PSA_FWU_SUPPORT */

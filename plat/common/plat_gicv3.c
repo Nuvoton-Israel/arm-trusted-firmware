@@ -169,20 +169,22 @@ uint32_t plat_interrupt_type_to_line(uint32_t type,
 		 * The S-EL1 interrupts are signaled as IRQ in S-EL0/1 contexts
 		 * and as FIQ in the NS-EL0/1/2 contexts
 		 */
-		if (security_state == SECURE)
+		if (security_state == SECURE) {
 			return __builtin_ctz(SCR_IRQ_BIT);
-		else
+		} else {
 			return __builtin_ctz(SCR_FIQ_BIT);
+		}
 		assert(0); /* Unreachable */
 	case INTR_TYPE_NS:
 		/*
 		 * The Non secure interrupts will be signaled as FIQ in S-EL0/1
 		 * contexts and as IRQ in the NS-EL0/1/2 contexts.
 		 */
-		if (security_state == SECURE)
+		if (security_state == SECURE) {
 			return __builtin_ctz(SCR_FIQ_BIT);
-		else
+		} else {
 			return __builtin_ctz(SCR_IRQ_BIT);
+		}
 		assert(0); /* Unreachable */
 	case INTR_TYPE_EL3:
 		/*
@@ -200,17 +202,17 @@ unsigned int plat_ic_get_running_priority(void)
 	return gicv3_get_running_priority();
 }
 
-int plat_ic_is_spi(unsigned int id)
+bool plat_ic_is_spi(unsigned int id)
 {
 	return (id >= MIN_SPI_ID) && (id <= MAX_SPI_ID);
 }
 
-int plat_ic_is_ppi(unsigned int id)
+bool plat_ic_is_ppi(unsigned int id)
 {
 	return (id >= MIN_PPI_ID) && (id < MIN_SPI_ID);
 }
 
-int plat_ic_is_sgi(unsigned int id)
+bool plat_ic_is_sgi(unsigned int id)
 {
 	return (id >= MIN_SGI_ID) && (id < MIN_PPI_ID);
 }
@@ -318,7 +320,7 @@ void plat_ic_set_spi_routing(unsigned int id, unsigned int routing_mode,
 		irm = GICV3_IRM_ANY;
 		break;
 	default:
-		assert(0); /* Unreachable */
+		assert(false); /* Unreachable */
 		break;
 	}
 

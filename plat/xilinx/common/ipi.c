@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2017-2020, Arm Limited and Contributors. All rights reserved.
  * Copyright (c) 2020-2022, Xilinx, Inc. All rights reserved.
- * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -20,6 +20,7 @@
 
 #include <ipi.h>
 #include <plat_private.h>
+#include "pm_defs.h"
 
 /*********************************************************************
  * Macros definitions
@@ -66,12 +67,12 @@ void ipi_config_table_init(const struct ipi_config *ipi_config_table,
  * Return: - 1 if within range, 0 if not.
  *
  */
-static inline int is_ipi_mb_within_range(uint32_t local, uint32_t remote)
+static inline uint32_t is_ipi_mb_within_range(uint32_t local, uint32_t remote)
 {
-	int ret = 1;
+	uint32_t ret = 1U;
 
-	if (remote >= ipi_total || local >= ipi_total) {
-		ret = 0;
+	if ((remote >= ipi_total) || (local >= ipi_total)) {
+		ret = 0U;
 	}
 
 	return ret;
@@ -86,15 +87,15 @@ static inline int is_ipi_mb_within_range(uint32_t local, uint32_t remote)
  * Return: 0 success, negative value for errors.
  *
  */
-int ipi_mb_validate(uint32_t local, uint32_t remote, unsigned int is_secure)
+int32_t ipi_mb_validate(uint32_t local, uint32_t remote, uint32_t is_secure)
 {
-	int ret = 0;
+	int32_t ret = 0;
 
-	if (!is_ipi_mb_within_range(local, remote)) {
+	if (is_ipi_mb_within_range(local, remote) == 0U) {
 		ret = -EINVAL;
-	} else if (IPI_IS_SECURE(local) && !is_secure) {
+	} else if (IPI_IS_SECURE(local) && (is_secure == 0U)) {
 		ret = -EPERM;
-	} else if (IPI_IS_SECURE(remote) && !is_secure) {
+	} else if (IPI_IS_SECURE(remote) && (is_secure == 0U)) {
 		ret = -EPERM;
 	} else {
 		/* To fix the misra 15.7 warning */
@@ -111,9 +112,12 @@ int ipi_mb_validate(uint32_t local, uint32_t remote, unsigned int is_secure)
  */
 void ipi_mb_open(uint32_t local, uint32_t remote)
 {
-	mmio_write_32(IPI_REG_BASE(local) + IPI_IDR_OFFSET,
+	uint64_t idr_offset = (uint64_t)(IPI_REG_BASE(local) + IPI_IDR_OFFSET);
+	uint64_t isr_offset = (uint64_t)(IPI_REG_BASE(local) + IPI_ISR_OFFSET);
+
+	mmio_write_32(idr_offset,
 		      IPI_BIT_MASK(remote));
-	mmio_write_32(IPI_REG_BASE(local) + IPI_ISR_OFFSET,
+	mmio_write_32(isr_offset,
 		      IPI_BIT_MASK(remote));
 }
 
@@ -125,7 +129,9 @@ void ipi_mb_open(uint32_t local, uint32_t remote)
  */
 void ipi_mb_release(uint32_t local, uint32_t remote)
 {
-	mmio_write_32(IPI_REG_BASE(local) + IPI_IDR_OFFSET,
+	uint64_t idr_offset = (uint64_t)(IPI_REG_BASE(local) + IPI_IDR_OFFSET);
+
+	mmio_write_32(idr_offset,
 		      IPI_BIT_MASK(remote));
 }
 
@@ -134,21 +140,22 @@ void ipi_mb_release(uint32_t local, uint32_t remote)
  * @local: local IPI ID.
  * @remote: remote IPI ID.
  *
- * Return: 0 idle, positive value for pending sending or receiving,
- *         negative value for errors.
+ * Return: 0 idle and positive value for pending sending or receiving.
  *
  */
-int ipi_mb_enquire_status(uint32_t local, uint32_t remote)
+uint32_t ipi_mb_enquire_status(uint32_t local, uint32_t remote)
 {
-	int ret = 0U;
+	uint32_t ret = (uint32_t)PM_RET_SUCCESS;
 	uint32_t status;
+	uint64_t obr_offset = (uint64_t)(IPI_REG_BASE(local) + IPI_OBR_OFFSET);
+	uint64_t isr_offset = (uint64_t)(IPI_REG_BASE(local) + IPI_ISR_OFFSET);
 
-	status = mmio_read_32(IPI_REG_BASE(local) + IPI_OBR_OFFSET);
-	if (status & IPI_BIT_MASK(remote)) {
+	status = mmio_read_32(obr_offset);
+	if ((status & IPI_BIT_MASK(remote)) != 0U) {
 		ret |= IPI_MB_STATUS_SEND_PENDING;
 	}
-	status = mmio_read_32(IPI_REG_BASE(local) + IPI_ISR_OFFSET);
-	if (status & IPI_BIT_MASK(remote)) {
+	status = mmio_read_32(isr_offset);
+	if ((status & IPI_BIT_MASK(remote)) != 0U) {
 		ret |= IPI_MB_STATUS_RECV_PENDING;
 	}
 
@@ -167,14 +174,15 @@ int ipi_mb_enquire_status(uint32_t local, uint32_t remote)
 void ipi_mb_notify(uint32_t local, uint32_t remote, uint32_t is_blocking)
 {
 	uint32_t status;
+	uint64_t trig_offset = (uint64_t)(IPI_REG_BASE(local) + IPI_TRIG_OFFSET);
+	uint64_t obr_offset = (uint64_t)(IPI_REG_BASE(local) + IPI_OBR_OFFSET);
 
-	mmio_write_32(IPI_REG_BASE(local) + IPI_TRIG_OFFSET,
+	mmio_write_32(trig_offset,
 		      IPI_BIT_MASK(remote));
-	if (is_blocking) {
+	if (is_blocking != 0U) {
 		do {
-			status = mmio_read_32(IPI_REG_BASE(local) +
-					      IPI_OBR_OFFSET);
-		} while (status & IPI_BIT_MASK(remote));
+			status = mmio_read_32(obr_offset);
+		} while ((status & IPI_BIT_MASK(remote)) != 0U);
 	}
 }
 
@@ -188,7 +196,9 @@ void ipi_mb_notify(uint32_t local, uint32_t remote, uint32_t is_blocking)
  */
 void ipi_mb_ack(uint32_t local, uint32_t remote)
 {
-	mmio_write_32(IPI_REG_BASE(local) + IPI_ISR_OFFSET,
+	uint64_t isr_offset = (uint64_t)(IPI_REG_BASE(local) + IPI_ISR_OFFSET);
+
+	mmio_write_32(isr_offset,
 		      IPI_BIT_MASK(remote));
 }
 
@@ -202,7 +212,9 @@ void ipi_mb_ack(uint32_t local, uint32_t remote)
  */
 void ipi_mb_disable_irq(uint32_t local, uint32_t remote)
 {
-	mmio_write_32(IPI_REG_BASE(local) + IPI_IDR_OFFSET,
+	uint64_t idr_offset = (uint64_t)(IPI_REG_BASE(local) + IPI_IDR_OFFSET);
+
+	mmio_write_32(idr_offset,
 		      IPI_BIT_MASK(remote));
 }
 
@@ -216,6 +228,8 @@ void ipi_mb_disable_irq(uint32_t local, uint32_t remote)
  */
 void ipi_mb_enable_irq(uint32_t local, uint32_t remote)
 {
-	mmio_write_32(IPI_REG_BASE(local) + IPI_IER_OFFSET,
+	uint64_t ier_offset = (uint64_t)(IPI_REG_BASE(local) + IPI_IER_OFFSET);
+
+	mmio_write_32(ier_offset,
 		      IPI_BIT_MASK(remote));
 }

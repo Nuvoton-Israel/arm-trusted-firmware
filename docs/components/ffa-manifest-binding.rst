@@ -1,11 +1,14 @@
-FF-A manifest binding to device tree
-========================================
+FF-A manifests binding to device tree
+=====================================
 
 This document defines the nodes and properties used to define a partition,
-according to the FF-A specification.
+according to the FF-A specification, and the SPMC manifest.
 
-Partition Properties
---------------------
+FF-A Partition Manifest Properties
+----------------------------------
+
+The FF-A partition manifest is consumed by the SPMC to configure the state
+associated with the related Secure Partition.
 
 - compatible [mandatory]
    - value type: <string>
@@ -29,8 +32,13 @@ Partition Properties
 
 - uuid [mandatory]
    - value type: <prop-encoded-array>
-   - An array consisting of 4 <u32> values, identifying the UUID of the service
-     implemented by this partition. The UUID format is described in RFC 4122.
+   - An array of comma separated tuples each consisting of 4 <u32> values,
+     identifying the UUID of the services implemented by this partition.
+     The UUID format is described in RFC 4122.
+   - These 4 <u32> values are packed similar to the UUID register mapping
+     specified in section '5.3 Unique Identification format', SMC Calling
+     Convention, DEN0028, v1.6 G BET0
+     (https://developer.arm.com/documentation/den0028/latest/).
 
 - id
    - value type: <u32>
@@ -82,7 +90,7 @@ Partition Properties
      the partition. Absence of this field indicates that the entry point is at
      offset 0x0 from the base of the partition's binary.
 
-- xlat-granule [mandatory]
+- xlat-granule
    - value type: <u32>
    - Translation granule used with the partition:
 
@@ -91,10 +99,10 @@ Partition Properties
       - 0x2: 64k
 
 - boot-order
-   - value type: <u16>
+   - value type: <u32>
    - A unique number amongst all partitions that specifies if this partition
      must be booted before others. The partition with the smaller number will be
-     booted first.
+     booted first. Highest vlue allowed for this field is 0xFFFF.
 
 - rx-tx-buffer
    - value type: "memory-regions" node
@@ -103,19 +111,26 @@ Partition Properties
      The "compatible" must be the string "arm,ffa-manifest-rx_tx-buffer".
 
 - messaging-method [mandatory]
-   - value type: <u8>
+   - value type: <u32>
    - Specifies which messaging methods are supported by the partition, set bit
      means the feature is supported, clear bit - not supported:
 
-      - Bit[0]: partition can receive direct requests if set
-      - Bit[1]: partition can send direct requests if set
+      - Bit[0]: partition can receive direct requests via FFA_MSG_SEND_DIRECT_REQ ABI if set
+      - Bit[1]: partition can send direct requests via FFA_MSG_SEND_DIRECT_REQ ABI if set
       - Bit[2]: partition can send and receive indirect messages
+      - Bit[9]: partition can receive direct requests via FFA_MSG_SEND_DIRECT_REQ2 ABI if set
+      - Bit[10]: partition can send direct requests via FFA_MSG_SEND_DIRECT_REQ2 ABI if set
 
 - managed-exit
    - value type: <empty>
    - Specifies if managed exit is supported.
    - This field is deprecated in favor of ns-interrupts-action field in the FF-A
      v1.1 EAC0 spec.
+
+- managed-exit-virq
+   - value type: <empty>
+   - Indicates if the partition needs managed exit, if supported, to be signaled
+     through vIRQ signal.
 
 - ns-interrupts-action [mandatory]
    - value type: <u32>
@@ -135,6 +150,24 @@ Partition Properties
 
       - 0x0: Other-Secure interrupt is queued
       - 0x1: Other-Secure interrupt is signaled
+
+- sri-interrupts-policy
+
+  - value type: <u32>
+  - Specifies how secure interrupts are handled when the SP is in a waiting
+    state and is targeted by a secure interrupt, or when the SP attempts to
+    return to a waiting state with pending secure interrupts. The value is a
+    bitfield.
+
+      - 0x0: Proactively inject the VI and resume SP when handling a secure
+        interrupt and SP in the waiting state.
+      - 0x1: Only when a secure interrupt is fired while target SP in the
+        waiting state, pend SRI to the NWd and rely on the scheduler to
+        explicitly donate CPU cycles to the SP.
+      - 0x2: Only when the SP attempts to go back to the waiting state while
+        having pending secure interrupts, trigger the SRI to the NWd and rely
+        on the scheduler to explicitly donate CPU cycles to the SP.
+      - 0x3: Enable both actions for values 0x1 and 0x2.
 
 - has-primary-scheduler
    - value type: <empty>
@@ -157,11 +190,6 @@ Partition Properties
      the FF-A boot information blob to be passed in the specified general purpose
      register.
 
-- stream-endpoint-ids
-   - value type: <prop-encoded-array>
-   - List of <u32> tuples, identifying the IDs this partition is acting as
-     proxy for.
-
 - power-management-messages
    - value type: <u32>
    - Specifies which power management messages a partition subscribes to.
@@ -172,8 +200,37 @@ Partition Properties
       - Bit[1]: CPU_SUSPEND
       - Bit[2]: CPU_SUSPEND_RESUME
 
+- vm-availability-messages
+   - value type: <u32>
+   - Specifies which VM availability messages a partition subscribes to. A set
+     bit means the partition should be informed of the event, clear bit - should
+     not be informed of event:
+
+      - Bit[0]: VM created
+      - Bit[1]: VM destroyed
+
+- lifecycle-support
+   - value type: <empty>
+   - Presence of this field indicates support for all partition lifecycle states
+     defined in the FF-A v1.3 ALP2 spec.
+
+- abort-action
+   - value type: <u32>
+   - Specifies the action that the SPMC takes when a partition encounters a fatal
+     error.
+
+      - 0x0: STOP
+      - 0x1: DESTROY
+      - 0x2: RESTART
+      - 0x3: PROPAGATE
+
+   - All other values are unsupported. If a partition does not specify this
+     field in the manifest, the SPMC takes implementation defined action.
+
+.. _memory_region_node:
+
 Memory Regions
---------------
+~~~~~~~~~~~~~~
 
 - compatible [mandatory]
    - value type: <string>
@@ -209,8 +266,35 @@ Memory Regions
      then communicate the region properties (including the base address chosen
      by the partition manager) to the partition.
 
+- load-address-relative-offset
+   - value type: <u64>
+   - Offset relative to the load address of the partition.
+     When this is provided in the partition manifest, it should be added to the
+     load address to get the base address of the region. The secure partition
+     manifest can have either "base-address" or "load-address-relative-offset".
+     It cannot have both.
+
+- stream-ids
+   - value type: <prop-encoded-array>
+   - List of IDs belonging to a DMA capable peripheral device that has access to
+     the memory region represented by current node.
+   - Each ID must have been declared in exactly one device region node.
+
+- smmu-id
+   - value type: <u32>
+   - Identifies the SMMU IP that enforces the access control for the DMA device
+     that owns the above stream-ids.
+
+- stream-ids-access-permissions
+   - value type: <prop-encoded-array>
+   - List of attributes representing the instruction and data access permissions
+     used by the DMA device streams to access the memory region represented by
+     current node.
+
+.. _device_region_node:
+
 Device Regions
---------------
+~~~~~~~~~~~~~~
 
 - compatible [mandatory]
    - value type: <string>
@@ -251,11 +335,10 @@ Device Regions
 
 - stream-ids
    - value type: <prop-encoded-array>
-   - A list of (id, mem-manage) pair, where:
+   - List of IDs where an ID is a unique <u32> value amongst all devices assigned
+     to the partition.
 
-      - id: A unique <u32> value amongst all devices assigned to the partition.
-
-- interrupts [mandatory]
+- interrupts
    - value type: <prop-encoded-array>
    - A list of (id, attributes) pair describing the device interrupts, where:
 
@@ -304,6 +387,41 @@ Device Regions
    - Presence of this field implies that this endpoint must be granted exclusive
      access and ownership of this device's MMIO region.
 
+SPMC Manifest Properties
+------------------------
+
+This manifest contains the SPMC *attribute* node consumed by the SPMD at
+boot time.
+
+attribute
+~~~~~~~~~
+
+- spmc_id
+   - value type: <u32>
+   - Defines the endpoint ID value that SPMC can query through ``FFA_ID_GET``.
+- maj_ver
+   - value type: <u32>
+   - Major of the FF-A version implemented by the SPMC. SPMD checks against its own
+     version.
+- min_ver
+   - value type>: <u32>
+   - Minor of the FF-A version implemented by the SPMC. SPMD checks against its own
+     version.
+- exec_state
+   - value type: <u32>
+   - Defines the SPMC execution state (AArch64 or AArch32).
+- load_address
+   - value type: <u64>
+   - Base physical address in which the SPMC binary is placed. Should be page aligned.
+- entrypoint:
+   - value type: <u64>
+   - Defines the physical address for the cold boot primary core entrypoint used by the SPMD
+     (currently matches ``BL32_BASE``) to enter the SPMC.
+- binary_size
+   - value type: <u32>
+   - Defines the maximum size of the SPMC binary. It is used with load_address to sanitize the
+     specified entrypoint.
+
 --------------
 
-*Copyright (c) 2019-2022, Arm Limited and Contributors. All rights reserved.*
+*Copyright (c) 2019-2025, Arm Limited and Contributors. All rights reserved.*

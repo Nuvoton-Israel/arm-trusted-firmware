@@ -573,6 +573,9 @@ int bl2_plat_handle_pre_image_load(unsigned int image_id)
 			return 1;
 		}
 
+		bl_mem_params->image_info.image_base = dest;
+		bl_mem_params->image_info.image_size = len;
+
 #if RCAR_GEN3_BL33_GZIP == 1
 		image_decompress_prepare(&bl_mem_params->image_info);
 #endif
@@ -625,6 +628,7 @@ int bl2_plat_handle_post_image_load(unsigned int image_id)
 				bl_mem_params->image_info.image_size);
 		}
 #endif
+		bl_mem_params->ep_info.pc = bl_mem_params->image_info.image_base;
 		memcpy(&params->bl33_ep_info, &bl_mem_params->ep_info,
 			sizeof(entry_point_info_t));
 		return 0;
@@ -754,6 +758,69 @@ err:
 	NOTICE("BL2: Cannot add RPC node to FDT (ret=%i)\n", ret);
 	panic();
 #endif
+}
+
+static void bl2_add_kaslr_seed(void)
+{
+	uint32_t cnt, isr, prr;
+	uint64_t seed;
+	int ret, node;
+
+	/* SCEG is only available on H3/M3-W/M3-N */
+	prr = mmio_read_32(RCAR_PRR);
+	switch (prr & PRR_PRODUCT_MASK) {
+	case PRR_PRODUCT_H3:
+	case PRR_PRODUCT_M3:
+	case PRR_PRODUCT_M3N:
+		break;
+	default:
+		return;
+	}
+
+	mmio_write_32(RCAR_CC63_BASE + CC63_TRNG_SW_RESET_REG_ADDR,
+		      CC63_TRNG_SW_RESET_REG_SET);
+
+	do {
+		mmio_write_32(RCAR_CC63_BASE + CC63_TRNG_CLK_ENABLE_REG_ADDR,
+			      CC63_TRNG_CLK_ENABLE_REG_SET);
+		mmio_write_32(RCAR_CC63_BASE + CC63_TRNG_SAMPLE_CNT1_REG_ADDR,
+			      CC63_TRNG_SAMPLE_CNT1_REG_SAMPLE_COUNT);
+		cnt = mmio_read_32(RCAR_CC63_BASE + CC63_TRNG_SAMPLE_CNT1_REG_ADDR);
+	} while (cnt != CC63_TRNG_SAMPLE_CNT1_REG_SAMPLE_COUNT);
+
+	mmio_write_32(RCAR_CC63_BASE + CC63_TRNG_CONFIG_REG_ADDR,
+		      CC63_TRNG_CONFIG_REG_ROSC_MAX_LENGTH);
+	mmio_write_32(RCAR_CC63_BASE + CC63_TRNG_DEBUG_CONTROL_REG_ADDR,
+		      CC63_TRNG_DEBUG_CONTROL_REG_80090B);
+	mmio_write_32(RCAR_CC63_BASE + CC63_TRNG_SOURCE_ENABLE_REG_ADDR,
+		      CC63_TRNG_SOURCE_ENABLE_REG_SET);
+
+	do {
+		isr = mmio_read_32(RCAR_CC63_BASE + CC63_TRNG_ISR_REG_ADDR);
+		if ((isr & CC63_TRNG_ISR_REG_AUTOCORR_ERR) != 0U) {
+			panic();
+		}
+	} while ((isr & CC63_TRNG_ISR_REG_EHR_VALID) == 0U);
+
+	mmio_write_32(RCAR_CC63_BASE + CC63_TRNG_ICR_REG_ADDR, UINT32_MAX);
+	seed = mmio_read_64(RCAR_CC63_BASE + CC63_TRNG_EHR_DATA_ADDR_0_REG_ADDR);
+	mmio_write_32(RCAR_CC63_BASE + CC63_TRNG_SOURCE_ENABLE_REG_ADDR,
+		      CC63_TRNG_SOURCE_ENABLE_REG_CLR);
+
+	node = ret = fdt_add_subnode(fdt, 0, "chosen");
+	if (ret < 0) {
+		goto err;
+	}
+
+	ret = fdt_setprop_u64(fdt, node, "kaslr-seed", seed);
+	if (ret < 0) {
+		goto err;
+	}
+
+	return;
+err:
+	NOTICE("BL2: Cannot add KASLR seed to FDT (ret=%i)\n", ret);
+	panic();
 }
 
 static void bl2_add_dram_entry(uint64_t start, uint64_t size)
@@ -1214,6 +1281,9 @@ lcm_state:
 
 	/* Print DRAM layout */
 	bl2_advertise_dram_size(product);
+
+	/* Add KASLR seed */
+	bl2_add_kaslr_seed();
 
 	if (boot_dev == MODEMR_BOOT_DEV_EMMC_25X1 ||
 	    boot_dev == MODEMR_BOOT_DEV_EMMC_50X8) {

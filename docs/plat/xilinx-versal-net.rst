@@ -24,6 +24,11 @@ To build TF-A for JTAG DCC console:
 make RESET_TO_BL31=1 CROSS_COMPILE=aarch64-none-elf- PLAT=versal_net VERSAL_NET_CONSOLE=dcc bl31
 ```
 
+To build TF-A with SDEI_SUPPORT:
+```bash
+make RESET_TO_BL31=1 CROSS_COMPILE=aarch64-none-elf- PLAT=versal_net SDEI_SUPPORT=1 bl31
+```
+
 Xilinx Versal NET platform specific build options
 -------------------------------------------------
 
@@ -75,13 +80,26 @@ IPI SMC call ranges
 | 0xc2001000-0xc2001FFF     | Fast SMC64 SiP Service call range used for AMD-Xilinx IPI |
 +---------------------------+-----------------------------------------------------------+
 
-PM SMC call ranges
+PM SMC call ranges for SiP SVC version 0.1
 --------------------------------------------------------
 
 +---------------------------+---------------------------------------------------------------------------+
 |   SMC Function Identifier |  Service type                                                             |
 +---------------------------+---------------------------------------------------------------------------+
 | 0xc2000000-0xc2000FFF     | Fast SMC64 SiP Service call range used for AMD-Xilinx Platform Management |
++---------------------------+---------------------------------------------------------------------------+
+
+PM SMC call ranges for SiP SVC version 0.2
+--------------------------------------------------------
+
++---------------------------+---------------------------------------------------------------------------+
+|   SMC Function Identifier |  Service type                                                             |
++---------------------------+---------------------------------------------------------------------------+
+| 0xc2000FFF                | Fast SMC64 SiP Service call used for pass-through of AMD-Xilinx Platform  |
+|                           | Management APIs to firmware                                               |
++---------------------------+---------------------------------------------------------------------------+
+| 0xc2000A00-0xc2000AFF     | Fast SMC64 SiP Service call range used for AMD-Xilinx Platform Management |
+|                           | specific TF-A APIs                                                        |
 +---------------------------+---------------------------------------------------------------------------+
 
 SMC function IDs for SiP Service queries

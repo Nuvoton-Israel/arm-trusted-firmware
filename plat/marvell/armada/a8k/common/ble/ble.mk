@@ -24,7 +24,7 @@ MV_DDR_INCLUDES		:=	-I$(CURDIR)/include				\
 BLE_DEFAULT_LINKER_SCRIPT_SOURCE := $(BLE_PATH)/ble.ld.S
 
 BLE_OBJS := $(addprefix $(BUILD_PLAT)/ble/,$(call SOURCES_TO_OBJS,$(BLE_SOURCES)))
-$(BLE_OBJS): PLAT_INCLUDES += -I$(MV_DDR_PATH)
+BLE_INCLUDE_DIRS += $(MV_DDR_PATH)
 $(BLE_OBJS): $(MV_DDR_LIB)
 
 $(MV_DDR_LIB): FORCE
@@ -32,4 +32,4 @@ $(MV_DDR_LIB): FORCE
 	$(if $(value MV_DDR_PATH),,$(error "Platform '$(PLAT)' for BLE requires MV_DDR_PATH. Please set MV_DDR_PATH to point to the right directory"))
 	$(if $(wildcard $(value MV_DDR_PATH)/*),,$(error "'MV_DDR_PATH=$(value MV_DDR_PATH)' was specified, but '$(value MV_DDR_PATH)' directory does not exist"))
 	$(if $(shell git -C $(value MV_DDR_PATH) rev-parse --show-cdup 2>&1),$(error "'MV_DDR_PATH=$(value MV_DDR_PATH)' was specified, but '$(value MV_DDR_PATH)' does not contain valid mv-ddr-marvell git repository"))
-	@+make -C $(MV_DDR_PATH) --no-print-directory PLAT_INCLUDES="$(MV_DDR_INCLUDES)" PLATFORM=$(PLAT) ARCH=AARCH64 OBJ_DIR=$(BUILD_PLAT)/ble
+	$(q)+make -C $(MV_DDR_PATH) --no-print-directory PLAT_INCLUDES="$(MV_DDR_INCLUDES)" PLATFORM=$(PLAT) ARCH=AARCH64 OBJ_DIR=$(BUILD_PLAT)/ble

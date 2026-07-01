@@ -103,13 +103,7 @@
 #endif /* ARM_BL2_SP_LIST_DTS */
 	};
 
-#if COT_DESC_IN_DTB
-	#if defined(ARM_COT_cca)
-		#include "cca_cot_descriptors.dtsi"
-	#elif defined(ARM_COT_tbbr)
-		#include "tbbr_cot_descriptors.dtsi"
-	#endif
-#endif
+#include "fvp_cot_desc.dtsi"
 
 #if MEASURED_BOOT
 	#include "event_log.dtsi"
@@ -123,16 +117,16 @@
 
 #if defined(ARM_COT_cca)
 /* FVP does not support the CCA NV Counter so use the Trusted one. */
-&cca_nv_counter {
+&cca_nv_ctr {
 	reg = <TFW_NVCTR_BASE>;
 };
 #endif
 
-&trusted_nv_counter {
+&trusted_nv_ctr {
 	reg = <TFW_NVCTR_BASE>;
 };
 
-&non_trusted_nv_counter {
+&non_trusted_nv_ctr {
 	reg = <NTFW_CTR_BASE>;
 };
 #endif

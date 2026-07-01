@@ -1,15 +1,12 @@
 /*
- * Copyright 2024 NXP
+ * Copyright 2024-2025 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
 #include <asm_macros.S>
 #include <platform_def.h>
-
-#define S32G_NCORE_CAIU0_BASE_ADDR		UL(0x50400000)
-#define S32G_NCORE_CAIUTC_OFF			U(0x0)
-#define S32G_NCORE_CAIUTC_ISOLEN_SHIFT		U(1)
+#include <s32cc-ncore.h>
 
 .globl	plat_crash_console_flush
 .globl	plat_crash_console_init
@@ -38,6 +35,8 @@ endfunc plat_crash_console_putc
 
 /* void plat_crash_console_flush(void); */
 func plat_crash_console_flush
+	mov_imm	x0, UART_BASE
+	b	console_linflex_core_flush
 	ret
 endfunc plat_crash_console_flush
 
@@ -102,27 +101,28 @@ endfunc plat_secondary_cold_boot_setup
  * Clobber list: x0, x1, x2
  */
 func plat_reset_handler
-	mov	x0, #S32G_NCORE_CAIU0_BASE_ADDR
-	ldr	w1, [x0, #S32G_NCORE_CAIUTC_OFF]
+	mov	x0, #NCORE_CAIU0_BASE_ADDR
+	ldr	w1, [x0, #NCORE_CAIUTC_OFF]
 	movz	w2, #1
-	lsl	w2, w2, #S32G_NCORE_CAIUTC_ISOLEN_SHIFT
+	lsl	w2, w2, #NCORE_CAIUTC_ISOLEN_SHIFT
 	orr	w1, w1, w2
-	str	w1, [x0, #S32G_NCORE_CAIUTC_OFF]
+	str	w1, [x0, #NCORE_CAIUTC_OFF]
 	ret
 endfunc plat_reset_handler
 
 /* void platform_mem_init(void); */
 func platform_mem_init
 	mov	x10, x30
-	mov	x0, #BL31_BASE
-	mov	x1, #(BL31_LIMIT & 0xFFFFU)
-	movk	x1, #(BL31_LIMIT >> 16), lsl #16
+	mov_imm	x0, BL31_BASE
+	mov_imm	x1, BL31_LIMIT
 	sub	x1, x1, x0
 	bl	zeromem
-	mov	x0, #BL33_BASE
-	mov	x1, #(BL33_LIMIT & 0xFFFFU)
-	movk	x1, #(BL33_LIMIT >> 16), lsl #16
+	mov_imm	x0, BL33_BASE
+	mov_imm	x1, BL33_LIMIT
 	sub	x1, x1, x0
+	bl	zeromem
+	mov_imm	x0, IO_BUFFER_BASE
+	mov_imm	x1, IO_BUFFER_SIZE
 	bl	zeromem
 	mov	x30, x10
 	ret

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2014-2025, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -9,6 +9,7 @@
 
 #include <arch_helpers.h>
 #include <common/debug.h>
+#include <drivers/arm/gic.h>
 #include <drivers/console.h>
 #include <plat/common/platform.h>
 
@@ -27,10 +28,15 @@ void __dead2 psci_system_off(void)
 
 	console_flush();
 
+#if USE_GIC_DRIVER
+	/* turn the GIC off before we hand off to the platform */
+	gic_cpuif_disable(plat_my_core_pos());
+#endif /* USE_GIC_DRIVER */
+
 	/* Call the platform specific hook */
 	psci_plat_pm_ops->system_off();
 
-	/* This function does not return. We should never get here */
+	psci_pwrdown_cpu_end_terminal();
 }
 
 void __dead2 psci_system_reset(void)
@@ -46,10 +52,15 @@ void __dead2 psci_system_reset(void)
 
 	console_flush();
 
+#if USE_GIC_DRIVER
+	/* turn the GIC off before we hand off to the platform */
+	gic_cpuif_disable(plat_my_core_pos());
+#endif /* USE_GIC_DRIVER */
+
 	/* Call the platform specific hook */
 	psci_plat_pm_ops->system_reset();
 
-	/* This function does not return. We should never get here */
+	psci_pwrdown_cpu_end_terminal();
 }
 
 u_register_t psci_system_reset2(uint32_t reset_type, u_register_t cookie)
@@ -65,8 +76,9 @@ u_register_t psci_system_reset2(uint32_t reset_type, u_register_t cookie)
 		/*
 		 * Only WARM_RESET is allowed for architectural type resets.
 		 */
-		if (reset_type != PSCI_RESET2_SYSTEM_WARM_RESET)
+		if (reset_type != PSCI_RESET2_SYSTEM_WARM_RESET) {
 			return (u_register_t) PSCI_E_INVALID_PARAMS;
+		}
 		if ((psci_plat_pm_ops->write_mem_protect != NULL) &&
 		    (psci_plat_pm_ops->write_mem_protect(0) < 0)) {
 			return (u_register_t) PSCI_E_NOT_SUPPORTED;
@@ -79,7 +91,15 @@ u_register_t psci_system_reset2(uint32_t reset_type, u_register_t cookie)
 	}
 	console_flush();
 
-	return (u_register_t)
-		psci_plat_pm_ops->system_reset2((int) is_vendor, reset_type,
-						cookie);
+#if USE_GIC_DRIVER
+	/* turn the GIC off before we hand off to the platform */
+	gic_cpuif_disable(plat_my_core_pos());
+#endif /* USE_GIC_DRIVER */
+
+	u_register_t ret =
+		(u_register_t) psci_plat_pm_ops->system_reset2((int) is_vendor, reset_type, cookie);
+	if (ret != PSCI_E_SUCCESS)
+		return ret;
+
+	psci_pwrdown_cpu_end_terminal();
 }

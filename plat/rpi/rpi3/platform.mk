@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2013-2024, Arm Limited and Contributors. All rights reserved.
+# Copyright (c) 2013-2025, Arm Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -8,7 +8,8 @@ include lib/libfdt/libfdt.mk
 include lib/xlat_tables_v2/xlat_tables.mk
 
 PLAT_INCLUDES		:=	-Iplat/rpi/common/include		\
-				-Iplat/rpi/rpi3/include
+				-Iplat/rpi/rpi3/include			\
+				-Ilib/libfdt
 
 PLAT_BL_COMMON_SOURCES	:=	drivers/ti/uart/aarch64/16550_console.S	\
 				drivers/arm/pl011/aarch64/pl011_console.S \
@@ -20,9 +21,55 @@ PLAT_BL_COMMON_SOURCES	:=	drivers/ti/uart/aarch64/16550_console.S	\
 				plat/rpi/common/rpi3_console_dual.c	\
 				${XLAT_TABLES_LIB_SRCS}
 
+ifeq (${DISCRETE_TPM},1)
+TPM2_MK := drivers/tpm/tpm2.mk
+$(info Including ${TPM2_MK})
+include ${TPM2_MK}
+endif
+
+ifeq (${TPM_INTERFACE},FIFO_SPI)
+PLAT_BL_COMMON_SOURCES	+=	drivers/gpio/gpio_spi.c		\
+				drivers/tpm/tpm2_slb9670/slb9670_gpio.c
+endif
+
+ifeq (${MEASURED_BOOT},1)
+MEASURED_BOOT_MK := drivers/measured_boot/event_log/event_log.mk
+$(info Including ${MEASURED_BOOT_MK})
+include ${MEASURED_BOOT_MK}
+
+PLAT_BL_COMMON_SOURCES	+=	$(TPM2_SOURCES)
+
+BL1_LIBS += $(LIBEVLOG_LIBS)
+BL1_INCLUDE_DIRS += $(LIBEVLOG_INCLUDE_DIRS)
+
+BL2_LIBS += $(LIBEVLOG_LIBS)
+BL2_INCLUDE_DIRS += $(LIBEVLOG_INCLUDE_DIRS)
+
+BL31_LIBS += $(LIBEVLOG_LIBS)
+BL31_INCLUDE_DIRS += $(LIBEVLOG_INCLUDE_DIRS)
+
+BL32_LIBS += $(LIBEVLOG_LIBS)
+BL32_INCLUDE_DIRS += $(LIBEVLOG_INCLUDE_DIRS)
+
+BL1_SOURCES		+= 	plat/rpi/rpi3/rpi3_bl1_mboot.c
+BL2_SOURCES		+= 	plat/rpi/rpi3/rpi3_bl2_mboot.c		\
+				plat/rpi/rpi3/rpi3_dyn_cfg_helpers.c	\
+				common/fdt_wrappers.c			\
+				common/fdt_fixup.c
+
+CRYPTO_SOURCES		:=	drivers/auth/crypto_mod.c
+
+BL1_SOURCES		+=	${CRYPTO_SOURCES}
+BL2_SOURCES		+=	${CRYPTO_SOURCES}
+
+include drivers/auth/mbedtls/mbedtls_crypto.mk
+
+endif
+
 BL1_SOURCES		+=	drivers/io/io_fip.c			\
 				drivers/io/io_memmap.c			\
 				drivers/io/io_storage.c			\
+				drivers/delay_timer/generic_delay_timer.c \
 				lib/cpus/aarch64/cortex_a53.S		\
 				plat/common/aarch64/platform_mp_stack.S	\
 				plat/rpi/rpi3/rpi3_bl1_setup.c		\
@@ -73,13 +120,13 @@ all: armstub
 # This target concatenates BL1 and the FIP so that the base addresses match the
 # ones defined in the memory map
 armstub: bl1 fip
-	@echo "  CAT     $@"
-	${Q}cp ${BUILD_PLAT}/bl1.bin ${RPI3_BL1_PAD_BIN}
-	${Q}truncate --size=131072 ${RPI3_BL1_PAD_BIN}
-	${Q}cat ${RPI3_BL1_PAD_BIN} ${BUILD_PLAT}/fip.bin > ${RPI3_ARMSTUB8_BIN}
-	@${ECHO_BLANK_LINE}
-	@echo "Built $@ successfully"
-	@${ECHO_BLANK_LINE}
+	$(s)echo "  CAT     $@"
+	$(q)cp ${BUILD_PLAT}/bl1.bin ${RPI3_BL1_PAD_BIN}
+	$(q)truncate --size=131072 ${RPI3_BL1_PAD_BIN}
+	$(q)cat ${RPI3_BL1_PAD_BIN} ${BUILD_PLAT}/fip.bin > ${RPI3_ARMSTUB8_BIN}
+	$(s)echo
+	$(s)echo "Built $@ successfully"
+	$(s)echo
 
 # Build config flags
 # ------------------
@@ -184,10 +231,11 @@ ifneq (${TRUSTED_BOARD_BOOT},0)
     include drivers/auth/mbedtls/mbedtls_crypto.mk
     include drivers/auth/mbedtls/mbedtls_x509.mk
 
-    AUTH_SOURCES	:=	drivers/auth/auth_mod.c			\
-				drivers/auth/crypto_mod.c		\
-				drivers/auth/img_parser_mod.c		\
-				drivers/auth/tbbr/tbbr_cot_common.c
+    AUTH_MK := drivers/auth/auth.mk
+    $(info Including ${AUTH_MK})
+    include ${AUTH_MK}
+
+    AUTH_SOURCES	+=	drivers/auth/tbbr/tbbr_cot_common.c
 
     BL1_SOURCES		+=	${AUTH_SOURCES}				\
 				bl1/tbbr/tbbr_img_desc.c		\
@@ -212,12 +260,12 @@ ifneq (${TRUSTED_BOARD_BOOT},0)
 
     certificates: $(ROT_KEY)
 
-    $(ROT_KEY): | $(BUILD_PLAT)
-	@echo "  OPENSSL $@"
-	$(Q)${OPENSSL_BIN_PATH}/openssl genrsa 2048 > $@ 2>/dev/null
+    $(ROT_KEY): | $$(@D)/
+	$(s)echo "  OPENSSL $@"
+	$(q)${OPENSSL_BIN_PATH}/openssl genrsa 2048 > $@ 2>/dev/null
 
-    $(ROTPK_HASH): $(ROT_KEY)
-	@echo "  OPENSSL $@"
-	$(Q)${OPENSSL_BIN_PATH}/openssl rsa -in $< -pubout -outform DER 2>/dev/null |\
+    $(ROTPK_HASH): $(ROT_KEY) | $$(@D)/
+	$(s)echo "  OPENSSL $@"
+	$(q)${OPENSSL_BIN_PATH}/openssl rsa -in $< -pubout -outform DER 2>/dev/null |\
 	${OPENSSL_BIN_PATH}/openssl dgst -sha256 -binary > $@ 2>/dev/null
 endif

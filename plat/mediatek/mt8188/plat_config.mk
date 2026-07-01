@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023, MediaTek Inc. All rights reserved.
+# Copyright (c) 2022-2024, MediaTek Inc. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -27,7 +27,6 @@ ERRATA_A78_1688305 := 1
 ERRATA_A78_1941498 := 1
 ERRATA_A78_1951500 := 1
 ERRATA_A78_1821534 := 1
-ERRATA_A78_2132060 := 1
 ERRATA_A78_2242635 := 1
 ERRATA_A78_2376745 := 1
 ERRATA_A78_2395406 := 1
@@ -45,6 +44,9 @@ CONFIG_MTK_SPM_VERSION := mt8188
 CONFIG_MTK_SUPPORT_SYSTEM_SUSPEND := y
 CPU_PM_TINYSYS_SUPPORT := y
 MTK_PUBEVENT_ENABLE := y
+
+# True Random Number Generator firmware Interface
+TRNG_SUPPORT := 1
 
 MACH_MT8188 := 1
 $(eval $(call add_define,MACH_MT8188))

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2024, STMicroelectronics - All Rights Reserved
+ * Copyright (C) 2018-2025, STMicroelectronics - All Rights Reserved
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -57,6 +57,8 @@ int stm32_get_otp_index(const char *otp_name, uint32_t *otp_idx,
 			uint32_t *otp_len);
 int stm32_get_otp_value(const char *otp_name, uint32_t *otp_val);
 int stm32_get_otp_value_from_idx(const uint32_t otp_idx, uint32_t *otp_val);
+/* update UID_WORD_NB array */
+int stm32_get_uid_otp(uint32_t uid[]);
 
 /* Get IWDG platform instance ID from peripheral IO memory base address */
 uint32_t stm32_iwdg_get_instance(uintptr_t base);
@@ -76,6 +78,8 @@ uintptr_t get_uart_address(uint32_t instance_nb);
 
 /* Setup the UART console */
 int stm32mp_uart_console_setup(void);
+
+bool stm32mp_is_wakeup_from_standby(void);
 
 /*
  * Platform util functions for the GPIO driver
@@ -120,6 +124,10 @@ void stm32mp_io_setup(void);
 int stm32mp_map_ddr_non_cacheable(void);
 int stm32mp_unmap_ddr(void);
 
+/* Functions to map RETRAM, and unmap it */
+int stm32mp_map_retram(void);
+int stm32mp_unmap_retram(void);
+
 /* Function to save boot info */
 void stm32_save_boot_info(boot_api_context_t *boot_context);
 /* Function to get boot peripheral info */
@@ -131,7 +139,8 @@ uintptr_t stm32_get_bkpr_boot_mode_addr(void);
 void stm32_display_board_info(uint32_t board_id);
 
 #if PSA_FWU_SUPPORT
-void stm32mp1_fwu_set_boot_idx(void);
+uintptr_t stm32_get_bkpr_fwu_info_addr(void);
+void stm32_fwu_set_boot_idx(void);
 uint32_t stm32_get_and_dec_fwu_trial_boot_cnt(void);
 void stm32_set_max_fwu_trial_boot_cnt(void);
 void stm32_clear_fwu_trial_boot_cnt(void);

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2021, Renesas Electronics Corporation. All rights reserved.
+# Copyright (c) 2018-2025, Renesas Electronics Corporation. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -225,7 +225,8 @@ include drivers/renesas/rzg/qos/qos.mk
 include drivers/renesas/rzg/pfc/pfc.mk
 include lib/libfdt/libfdt.mk
 
-PLAT_INCLUDES	+=	-Idrivers/renesas/common/ddr		\
+PLAT_INCLUDES	+=	-Iplat/renesas/rzg/include		\
+			-Idrivers/renesas/common/ddr		\
 			-Idrivers/renesas/rzg/qos		\
 			-Idrivers/renesas/rzg/board		\
 			-Idrivers/renesas/common		\
@@ -236,6 +237,7 @@ PLAT_INCLUDES	+=	-Idrivers/renesas/common/ddr		\
 			-Idrivers/renesas/common/scif		\
 			-Idrivers/renesas/common/emmc		\
 			-Idrivers/renesas/common/pwrc		\
+			-Idrivers/renesas/common/timer		\
 			-Idrivers/renesas/common/io
 
 BL2_SOURCES	+=	plat/renesas/rzg/bl2_plat_setup.c	\
@@ -249,13 +251,13 @@ distclean realclean clean: clean_layout_tool clean_srecord
 LAYOUT_TOOLPATH ?= tools/renesas/rzg_layout_create
 
 clean_layout_tool:
-	@echo "clean layout tool"
-	${Q}${MAKE} -C ${LAYOUT_TOOLPATH} clean
+	$(s)echo "clean layout tool"
+	$(q)${MAKE} -C ${LAYOUT_TOOLPATH} clean
 
 .PHONY: rzg_layout_create
 rzg_layout_create:
-	@echo "generating layout srecs"
-	${Q}${MAKE} CPPFLAGS="-D=AARCH64" --no-print-directory -C ${LAYOUT_TOOLPATH}
+	$(s)echo "generating layout srecs"
+	$(q)${MAKE} CPPFLAGS="-D=AARCH64" --no-print-directory -C ${LAYOUT_TOOLPATH}
 
 # srecords
 SREC_PATH	= ${BUILD_PLAT}
@@ -263,16 +265,16 @@ BL2_ELF_SRC	= ${SREC_PATH}/bl2/bl2.elf
 BL31_ELF_SRC	= ${SREC_PATH}/bl31/bl31.elf
 
 clean_srecord:
-	@echo "clean bl2 and bl31 srecs"
+	$(s)echo "clean bl2 and bl31 srecs"
 	rm -f ${SREC_PATH}/bl2.srec ${SREC_PATH}/bl31.srec
 
 $(SREC_PATH)/bl2.srec: $(BL2_ELF_SRC)
-	@echo "generating srec: $(SREC_PATH)/bl2.srec"
-	$(Q)$($(ARCH)-oc) -O srec --srec-forceS3 $(BL2_ELF_SRC)  $(SREC_PATH)/bl2.srec
+	$(s)echo "generating srec: $(SREC_PATH)/bl2.srec"
+	$(q)$($(ARCH)-oc) -O srec --srec-forceS3 $(BL2_ELF_SRC)  $(SREC_PATH)/bl2.srec
 
 $(SREC_PATH)/bl31.srec: $(BL31_ELF_SRC)
-	@echo "generating srec: $(SREC_PATH)/bl31.srec"
-	$(Q)$($(ARCH)-oc) -O srec --srec-forceS3 $(BL31_ELF_SRC) $(SREC_PATH)/bl31.srec
+	$(s)echo "generating srec: $(SREC_PATH)/bl31.srec"
+	$(q)$($(ARCH)-oc) -O srec --srec-forceS3 $(BL31_ELF_SRC) $(SREC_PATH)/bl31.srec
 
 .PHONY: rzg_srecord
 rzg_srecord: $(SREC_PATH)/bl2.srec $(SREC_PATH)/bl31.srec

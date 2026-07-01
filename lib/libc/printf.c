@@ -44,19 +44,19 @@ static int unsigned_num_print(unsigned long long int unum, unsigned int radix,
 	unsigned int rem;
 
 	/* num_buf is only large enough for radix >= 10 */
-	if (radix < 10) {
+	if (radix < 10U) {
 		assert(0);
 		return 0;
 	}
 
 	do {
-		rem = unum % radix;
-		if (rem < 0xa) {
+		rem = (uint32_t)(unum % radix);
+		if (rem < 0xaU) {
 			num_buf[i] = '0' + rem;
 		} else if (uppercase) {
-			num_buf[i] = 'A' + (rem - 0xa);
+			num_buf[i] = 'A' + (rem - 0xaU);
 		} else {
-			num_buf[i] = 'a' + (rem - 0xa);
+			num_buf[i] = 'a' + (rem - 0xaU);
 		}
 		i++;
 		unum /= radix;
@@ -64,14 +64,14 @@ static int unsigned_num_print(unsigned long long int unum, unsigned int radix,
 
 	if (padn > 0) {
 		while (i < padn) {
-			(void)putchar(padc);
+			(void)putchar((int32_t)padc);
 			count++;
 			padn--;
 		}
 	}
 
 	while (--i >= 0) {
-		(void)putchar(num_buf[i]);
+		(void)putchar((int32_t)num_buf[i]);
 		count++;
 	}
 
@@ -105,7 +105,7 @@ int vprintf(const char *fmt, va_list args)
 	int l_count;
 	long long int num;
 	unsigned long long int unum;
-	char *str;
+	const char *str;
 	char padc = '\0'; /* Padding character */
 	int padn; /* Number of characters to pad */
 	int count = 0; /* Number of printed characters */
@@ -122,17 +122,18 @@ int vprintf(const char *fmt, va_list args)
 loop:
 			switch (*fmt) {
 			case '%':
-				(void)putchar('%');
+				(void)putchar((int32_t)'%');
 				break;
 			case 'i': /* Fall through to next one */
 			case 'd':
 				num = get_num_va_args(args, l_count);
 				if (num < 0) {
-					(void)putchar('-');
+					(void)putchar((int32_t)'-');
 					unum = (unsigned long long int)-num;
 					padn--;
-				} else
+				} else {
 					unum = (unsigned long long int)num;
+				}
 
 				count += unsigned_num_print(unum, 10,
 							    padc, padn, uppercase);
@@ -142,7 +143,7 @@ loop:
 				count++;
 				break;
 			case 's':
-				str = va_arg(args, char *);
+				str = va_arg(args, const char *);
 				count += string_print(str);
 				break;
 			case 'p':
@@ -164,8 +165,9 @@ loop:
 							    padc, padn, uppercase);
 				break;
 			case 'z':
-				if (sizeof(size_t) == 8U)
+				if (sizeof(size_t) == 8U) {
 					l_count = 2;
+				}
 
 				fmt++;
 				goto loop;

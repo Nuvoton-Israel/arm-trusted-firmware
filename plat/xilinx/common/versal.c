@@ -7,6 +7,7 @@
 #include <common/debug.h>
 #include <lib/mmio.h>
 #include <lib/smccc.h>
+#include <plat/common/platform.h>
 #include <services/arm_arch_svc.h>
 
 #include <plat_private.h>
@@ -24,12 +25,15 @@
  */
 int32_t plat_is_smccc_feature_available(u_register_t fid)
 {
-	switch (fid) {
-	case SMCCC_ARCH_SOC_ID:
-		return SMC_ARCH_CALL_SUCCESS;
-	default:
-		return SMC_ARCH_CALL_NOT_SUPPORTED;
+	int32_t ret = 0;
+
+	if (fid == SMCCC_ARCH_SOC_ID) {
+		ret = SMC_ARCH_CALL_SUCCESS;
+	} else {
+		ret = SMC_ARCH_CALL_NOT_SUPPORTED;
 	}
+
+	return ret;
 }
 
 /**
@@ -59,5 +63,5 @@ int32_t plat_get_soc_version(void)
  */
 int32_t plat_get_soc_revision(void)
 {
-	return (platform_id & SOC_ID_REV_MASK);
+	return (int32_t)(platform_id & SOC_ID_REV_MASK);
 }

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2013-2024, Arm Limited and Contributors. All rights reserved.
+# Copyright (c) 2013-2025, Arm Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -7,7 +7,7 @@
 INCLUDES		+=	-Iinclude/bl32/tsp
 
 ifeq (${SPMC_AT_EL3},1)
-   BL32_SOURCES            +=      bl32/tsp/tsp_ffa_main.c                    \
+   BL32_SOURCES            +=      bl32/tsp/tsp_ffa_main.c		\
 				   bl32/tsp/ffa_helpers.c
 else
    BL32_SOURCES            +=      bl32/tsp/tsp_main.c
@@ -19,16 +19,28 @@ BL32_SOURCES		+=	bl32/tsp/aarch64/tsp_entrypoint.S	\
 				bl32/tsp/tsp_interrupt.c		\
 				bl32/tsp/tsp_timer.c			\
 				bl32/tsp/tsp_common.c			\
+				bl32/tsp/tsp_context.c			\
 				common/aarch64/early_exceptions.S	\
 				lib/locks/exclusive/aarch64/spinlock.S
 
 BL32_DEFAULT_LINKER_SCRIPT_SOURCE := bl32/tsp/tsp.ld.S
 
-ifeq ($($(ARCH)-ld-id),gnu-gcc)
-        BL32_LDFLAGS	+=	-Wl,--sort-section=alignment
-else ifneq ($(filter llvm-lld gnu-ld,$($(ARCH)-ld-id)),)
-        BL32_LDFLAGS	+=	--sort-section=alignment
-endif
+# CRYPTO_SUPPORT
+NEED_AUTH := 0
+NEED_HASH := $(if $(filter 1,$(MEASURED_BOOT)),1,)
+$(eval $(call set_crypto_support,NEED_AUTH,NEED_HASH))
+
+# BL32_CPPFLAGS
+$(eval BL32_CPPFLAGS += $(call make_defines, \
+    $(sort \
+        CRYPTO_SUPPORT \
+)))
+
+# Numeric_Flags
+$(eval $(call assert_numerics,\
+    $(sort \
+	CRYPTO_SUPPORT \
+)))
 
 # This flag determines if the TSPD initializes BL32 in tspd_init() (synchronous
 # method) or configures BL31 to pass control to BL32 instead of BL33

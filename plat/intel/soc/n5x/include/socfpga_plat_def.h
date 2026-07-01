@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2020-2022, ARM Limited and Contributors. All rights reserved.
  * Copyright (c) 2020-2023, Intel Corporation. All rights reserved.
+ * Copyright (c) 2024, Altera Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -14,10 +15,11 @@
 
 /* Platform Setting */
 #define PLATFORM_MODEL				PLAT_SOCFPGA_N5X
-#define BOOT_SOURCE				BOOT_SOURCE_SDMMC
 #define PLAT_PRIMARY_CPU			0
 #define PLAT_CLUSTER_ID_MPIDR_AFF_SHIFT		MPIDR_AFF1_SHIFT
 #define PLAT_CPU_ID_MPIDR_AFF_SHIFT		MPIDR_AFF0_SHIFT
+#define PLAT_HANDOFF_OFFSET			0xFFE3F000
+#define PLAT_TIMER_BASE_ADDR			0xFFD01000
 
 /* FPGA config helpers */
 #define INTEL_SIP_SMC_FPGA_CONFIG_ADDR		0x400000
@@ -27,13 +29,22 @@
 #define CAD_QSPIDATA_OFST			0xff900000
 #define CAD_QSPI_OFFSET				0xff8d2000
 
+/* FIP Setting */
+#define PLAT_FIP_BASE				(0)
+#define PLAT_FIP_MAX_SIZE			(0x1000000)
+
+/* SDMMC Setting */
+#define PLAT_MMC_DATA_BASE			(0xffe3c000)
+#define PLAT_MMC_DATA_SIZE			(0x2000)
+#define SOCFPGA_MMC_BLOCK_SIZE			U(8192)
+
 /* Register Mapping */
 #define SOCFPGA_CCU_NOC_REG_BASE		U(0xf7000000)
 #define SOCFPGA_F2SDRAMMGR_REG_BASE		U(0xf8024000)
 #define SOCFPGA_MMC_REG_BASE			U(0xff808000)
 #define SOCFPGA_RSTMGR_REG_BASE			U(0xffd11000)
 #define SOCFPGA_SYSMGR_REG_BASE			U(0xffd12000)
-#define SOCFPGA_ECC_QSPI_REG_BASE				U(0xffa22000)
+#define SOCFPGA_ECC_QSPI_REG_BASE		U(0xffa22000)
 
 #define SOCFPGA_L4_PER_SCR_REG_BASE		U(0xffd21000)
 #define SOCFPGA_L4_SYS_SCR_REG_BASE		U(0xffd21100)
@@ -80,7 +91,7 @@
 /*******************************************************************************
  * WDT related constants
  ******************************************************************************/
-#define WDT_BASE			(0xFFD00200)
+#define WDT_BASE				(0xFFD00200)
 
 /*******************************************************************************
  * GIC related constants
@@ -91,7 +102,7 @@
 #define PLAT_GICR_BASE				0
 
 #define PLAT_SYS_COUNTER_FREQ_IN_TICKS		(400000000)
-#define PLAT_HZ_CONVERT_TO_MHZ		(1000000)
+#define PLAT_HZ_CONVERT_TO_MHZ			(1000000)
 
 /*******************************************************************************
  * SDMMC related pointer function
@@ -100,10 +111,21 @@
 #define SDMMC_WRITE_BLOCKS			mmc_write_blocks
 
 /*******************************************************************************
- * sysmgr.boot_scratch_cold6 & 7 (64bit) are used to indicate L2 reset
+ * sysmgr.boot_scratch_cold6 Bits[3:0] is used to indicate L2 reset
  * is done and HPS should trigger warm reset via RMR_EL3.
  ******************************************************************************/
-#define L2_RESET_DONE_REG			0xFFD12218
+/*
+ * Magic key bits: 4 bits[3:0] from boot scratch register COLD6 are used to
+ * indicate the below requests/status
+ *     0x0       : Default value on reset, not used
+ *     0x1       : L2/warm reset is completed
+ *     0x2 - 0xF : Reserved for future use
+ */
+#define BS_REG_MAGIC_KEYS_MASK			0x0F
+#define BS_REG_MAGIC_KEYS_POS			0x00
+#define L2_RESET_DONE_STATUS			(0x01 << BS_REG_MAGIC_KEYS_POS)
+
+#define L2_RESET_DONE_REG			SOCFPGA_SYSMGR(BOOT_SCRATCH_COLD_6)
 
 /* Platform specific system counter */
 #define PLAT_SYS_COUNTER_FREQ_IN_MHZ		U(400)

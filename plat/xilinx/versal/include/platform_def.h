@@ -17,7 +17,9 @@
  ******************************************************************************/
 
 /* Size of cacheable stacks */
+#ifndef PLATFORM_STACK_SIZE
 #define PLATFORM_STACK_SIZE	U(0x440)
+#endif
 
 #define PLATFORM_CORE_COUNT		U(2)
 #define PLAT_MAX_PWR_LVL		U(1)
@@ -64,6 +66,12 @@
 #endif
 
 /*******************************************************************************
+ * HIGH and LOW DDR MAX definitions
+ ******************************************************************************/
+#define PLAT_DDR_LOWMEM_MAX		U(0x80000000)
+#define PLAT_DDR_HIGHMEM_MAX		U(0x100000000)
+
+/*******************************************************************************
  * TSP  specific defines.
  ******************************************************************************/
 #define TSP_SEC_MEM_BASE		BL32_BASE
@@ -78,14 +86,14 @@
 
 #if (BL31_BASE >= (1ULL << 32U))
 /* Address range in High DDR and HBM memory range */
-#define PLAT_ADDR_SPACE_SHIFT		U(42)
+#define PLAT_ADDR_SPACE_SHIFT		42U
 #else
 /* Address range in OCM and Low DDR memory range */
-#define PLAT_ADDR_SPACE_SHIFT		U(32)
+#define PLAT_ADDR_SPACE_SHIFT		32U
 #endif
 
-#define PLAT_PHY_ADDR_SPACE_SIZE        (1ull << PLAT_ADDR_SPACE_SHIFT)
-#define PLAT_VIRT_ADDR_SPACE_SIZE       (1ull << PLAT_ADDR_SPACE_SHIFT)
+#define PLAT_PHY_ADDR_SPACE_SIZE        (1ULL << PLAT_ADDR_SPACE_SHIFT)
+#define PLAT_VIRT_ADDR_SPACE_SIZE       (1ULL << PLAT_ADDR_SPACE_SHIFT)
 
 #define XILINX_OF_BOARD_DTB_MAX_SIZE	U(0x200000)
 
@@ -123,7 +131,7 @@
  */
 #define PLAT_VERSAL_G1S_IRQS	VERSAL_IRQ_SEC_PHY_TIMER
 #define PLAT_VERSAL_G0_IRQS	VERSAL_IRQ_SEC_PHY_TIMER
-#define PLAT_VERSAL_IPI_IRQ	U(62)
+#define PLAT_VERSAL_IPI_IRQ	62U
 
 #define PLAT_VERSAL_G1S_IRQ_PROPS(grp) \
 	INTR_PROP_DESC(VERSAL_IRQ_SEC_PHY_TIMER, GIC_HIGHEST_SEC_PRIORITY, grp, \

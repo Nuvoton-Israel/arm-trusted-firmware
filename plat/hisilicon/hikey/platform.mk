@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017-2023, ARM Limited and Contributors. All rights reserved.
+# Copyright (c) 2017-2025, Arm Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -127,10 +127,11 @@ ifneq (${TRUSTED_BOARD_BOOT},0)
 include drivers/auth/mbedtls/mbedtls_crypto.mk
 include drivers/auth/mbedtls/mbedtls_x509.mk
 
-AUTH_SOURCES		:=	drivers/auth/auth_mod.c			\
-				drivers/auth/crypto_mod.c		\
-				drivers/auth/img_parser_mod.c		\
-				drivers/auth/tbbr/tbbr_cot_common.c
+AUTH_MK := drivers/auth/auth.mk
+$(info Including ${AUTH_MK})
+include ${AUTH_MK}
+
+AUTH_SOURCES		+=	drivers/auth/tbbr/tbbr_cot_common.c
 
 BL1_SOURCES		+=	${AUTH_SOURCES}				\
 				plat/common/tbbr/plat_tbbr.c		\
@@ -152,13 +153,13 @@ $(BUILD_PLAT)/bl1/hikey_rotpk.o: $(ROTPK_HASH)
 $(BUILD_PLAT)/bl2/hikey_rotpk.o: $(ROTPK_HASH)
 
 certificates: $(ROT_KEY)
-$(ROT_KEY): | $(BUILD_PLAT)
-	@echo "  OPENSSL $@"
-	$(Q)${OPENSSL_BIN_PATH}/openssl genrsa 2048 > $@ 2>/dev/null
+$(ROT_KEY): | $$(@D)/
+	$(s)echo "  OPENSSL $@"
+	$(q)${OPENSSL_BIN_PATH}/openssl genrsa 2048 > $@ 2>/dev/null
 
-$(ROTPK_HASH): $(ROT_KEY)
-	@echo "  OPENSSL $@"
-	$(Q)${OPENSSL_BIN_PATH}/openssl rsa -in $< -pubout -outform DER 2>/dev/null |\
+$(ROTPK_HASH): $(ROT_KEY) | $$(@D)/
+	$(s)echo "  OPENSSL $@"
+	$(q)${OPENSSL_BIN_PATH}/openssl rsa -in $< -pubout -outform DER 2>/dev/null |\
 	${OPENSSL_BIN_PATH}/openssl dgst -sha256 -binary > $@ 2>/dev/null
 endif
 

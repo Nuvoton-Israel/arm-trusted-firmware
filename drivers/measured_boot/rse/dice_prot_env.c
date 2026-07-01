@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Arm Limited. All rights reserved.
+ * Copyright (c) 2024-2025, Arm Limited. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -76,7 +76,7 @@ int dpe_measure_and_record(struct dpe_metadata *metadata,
 {
 	static int current_context_handle;
 	DiceInputValues dice_inputs = { 0 };
-	int new_parent_context_handle;
+	int new_parent_context_handle = 0;
 	int new_context_handle;
 	dpe_error_t ret;
 	int rc;
@@ -115,7 +115,7 @@ int dpe_measure_and_record(struct dpe_metadata *metadata,
 				 metadata->allow_new_context_to_derive,
 				 metadata->create_certificate,
 				 &dice_inputs,
-				 0, /* target_locality */
+				 metadata->target_locality,
 				 false, /* return_certificate */
 				 true, /* allow_new_context_to_export */
 				 false, /* export_cdi */
@@ -131,7 +131,8 @@ int dpe_measure_and_record(struct dpe_metadata *metadata,
 			 */
 			VERBOSE("Share new_context_handle with child: 0x%x\n",
 				new_context_handle);
-			plat_dpe_share_context_handle(&new_context_handle);
+			plat_dpe_share_context_handle(&new_context_handle,
+						      &new_parent_context_handle);
 		}
 	} else {
 		ERROR("dpe_derive_context failed: %d\n", ret);

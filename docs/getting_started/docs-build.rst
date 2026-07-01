@@ -37,29 +37,12 @@ Ubuntu):
 Building rendered documentation
 -------------------------------
 
-To install Python dependencies using Poetry:
+The documentation can be compiled into HTML-formatted pages from the project
+root directory by running:
 
 .. code:: shell
 
-    poetry install
-
-Poetry will create a new virtual environment and install all dependencies listed
-in ``pyproject.toml``. You can get information about this environment, such as
-its location and the Python version, with the command:
-
-.. code:: shell
-
-    poetry env info
-
-If you have already sourced a virtual environment, Poetry will respect this and
-install dependencies there.
-
-Once all dependencies are installed, the documentation can be compiled into
-HTML-formatted pages from the project root directory by running:
-
-.. code:: shell
-
-   poetry run make doc
+   make doc
 
 Output from the build process will be placed in: ``docs/build/html``.
 
@@ -72,7 +55,7 @@ formats.
 
 .. code:: shell
 
-   poetry run make -C docs help
+   make -C docs help
 
 To build the documentation in PDF format, additionally ensure that the following
 packages are installed:
@@ -97,9 +80,10 @@ docs latexpdf`` to build the documentation. Output from the build process
 Building rendered documentation from Poetry's virtual environment
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The command ``poetry run`` used in the steps above executes the input command
-from inside the project's virtual environment. The easiest way to activate this
-virtual environment is with the ``poetry shell`` command.
+If Poetry is installed, the ``doc`` target wraps its build steps with ``poetry
+run``, which runs the specified command within the project's virtual
+environment. The easiest way to activate this environment manually is by using
+the ``poetry shell`` command.
 
 Running ``poetry shell`` from the directory containing this project, activates
 the same virtual environment. This creates a sub-shell through which you can
@@ -108,7 +92,7 @@ build the documentation directly with ``make``.
 .. code:: shell
 
     poetry shell
-    make doc
+    make -C docs html
 
 Type ``exit`` to deactivate the virtual environment and exit this new shell. For
 other use cases, please see the official `Poetry`_ documentation.
@@ -129,7 +113,7 @@ from project root directory
         bash -c 'cd /tf-a &&
             apt-get update && apt-get install -y curl plantuml &&
             curl -sSL https://install.python-poetry.org | python3 - &&
-            ~/.local/bin/poetry install && ~/.local/bin/poetry run make doc'
+            ~/.local/bin/poetry run make doc'
 
 The above command fetches the ``sphinxdoc/sphinx`` container from `docker
 hub`_, launches the container, installs documentation requirements and finally
@@ -138,7 +122,7 @@ build process will be placed in: ``docs/build/html``.
 
 --------------
 
-*Copyright (c) 2019-2023, Arm Limited. All rights reserved.*
+*Copyright (c) 2019-2025, Arm Limited. All rights reserved.*
 
 .. _Sphinx: http://www.sphinx-doc.org/en/master/
 .. _Poetry: https://python-poetry.org/docs/

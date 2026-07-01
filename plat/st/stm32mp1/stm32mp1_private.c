@@ -29,10 +29,6 @@
  * (so it should be in Zone 2).
  */
 #define TAMP_BOOT_FWU_INFO_REG_ID	U(10)
-#define TAMP_BOOT_FWU_INFO_IDX_MSK	GENMASK(3, 0)
-#define TAMP_BOOT_FWU_INFO_IDX_OFF	U(0)
-#define TAMP_BOOT_FWU_INFO_CNT_MSK	GENMASK(7, 4)
-#define TAMP_BOOT_FWU_INFO_CNT_OFF	U(4)
 
 #if defined(IMAGE_BL2)
 #define MAP_SEC_SYSRAM	MAP_REGION_FLAT(STM32MP_SYSRAM_BASE, \
@@ -115,14 +111,14 @@ void configure_mmu(void)
 uintptr_t stm32_get_gpio_bank_base(unsigned int bank)
 {
 #if STM32MP13
-	assert((GPIO_BANK_A == 0) && (bank <= GPIO_BANK_I));
+	assert(bank <= GPIO_BANK_I);
 #endif
 #if STM32MP15
 	if (bank == GPIO_BANK_Z) {
 		return GPIOZ_BASE;
 	}
 
-	assert((GPIO_BANK_A == 0) && (bank <= GPIO_BANK_K));
+	assert(bank <= GPIO_BANK_K);
 #endif
 
 	return GPIOA_BASE + (bank * GPIO_BANK_OFFSET);
@@ -131,14 +127,14 @@ uintptr_t stm32_get_gpio_bank_base(unsigned int bank)
 uint32_t stm32_get_gpio_bank_offset(unsigned int bank)
 {
 #if STM32MP13
-	assert((GPIO_BANK_A == 0) && (bank <= GPIO_BANK_I));
+	assert(bank <= GPIO_BANK_I);
 #endif
 #if STM32MP15
 	if (bank == GPIO_BANK_Z) {
 		return 0;
 	}
 
-	assert((GPIO_BANK_A == 0) && (bank <= GPIO_BANK_K));
+	assert(bank <= GPIO_BANK_K);
 #endif
 
 	return bank * GPIO_BANK_OFFSET;
@@ -161,14 +157,14 @@ bool stm32_gpio_is_secure_at_reset(unsigned int bank)
 unsigned long stm32_get_gpio_bank_clock(unsigned int bank)
 {
 #if STM32MP13
-	assert((GPIO_BANK_A == 0) && (bank <= GPIO_BANK_I));
+	assert(bank <= GPIO_BANK_I);
 #endif
 #if STM32MP15
 	if (bank == GPIO_BANK_Z) {
 		return GPIOZ;
 	}
 
-	assert((GPIO_BANK_A == 0) && (bank <= GPIO_BANK_K));
+	assert(bank <= GPIO_BANK_K);
 #endif
 
 	return GPIOA + (bank - GPIO_BANK_A);
@@ -284,7 +280,7 @@ void stm32mp1_deconfigure_uart_pins(void)
 uint32_t stm32mp_get_chip_version(void)
 {
 #if STM32MP13
-	return stm32mp1_syscfg_get_chip_version();
+	return stm32mp_syscfg_get_chip_version();
 #endif
 #if STM32MP15
 	uint32_t version = 0U;
@@ -301,7 +297,7 @@ uint32_t stm32mp_get_chip_version(void)
 uint32_t stm32mp_get_chip_dev_id(void)
 {
 #if STM32MP13
-	return stm32mp1_syscfg_get_chip_dev_id();
+	return stm32mp_syscfg_get_chip_dev_id();
 #endif
 #if STM32MP15
 	uint32_t dev_id;
@@ -668,59 +664,20 @@ uint32_t stm32_iwdg_shadow_update(uint32_t iwdg_inst, uint32_t flags)
 }
 #endif
 
+bool stm32mp_is_wakeup_from_standby(void)
+{
+	/* TODO add source code to determine if platform is waking up from standby mode */
+	return false;
+}
+
 uintptr_t stm32_get_bkpr_boot_mode_addr(void)
 {
 	return tamp_bkpr(TAMP_BOOT_MODE_BACKUP_REG_ID);
 }
 
 #if PSA_FWU_SUPPORT
-void stm32mp1_fwu_set_boot_idx(void)
+uintptr_t stm32_get_bkpr_fwu_info_addr(void)
 {
-	clk_enable(RTCAPB);
-	mmio_clrsetbits_32(tamp_bkpr(TAMP_BOOT_FWU_INFO_REG_ID),
-			   TAMP_BOOT_FWU_INFO_IDX_MSK,
-			   (plat_fwu_get_boot_idx() << TAMP_BOOT_FWU_INFO_IDX_OFF) &
-			   TAMP_BOOT_FWU_INFO_IDX_MSK);
-	clk_disable(RTCAPB);
-}
-
-uint32_t stm32_get_and_dec_fwu_trial_boot_cnt(void)
-{
-	uintptr_t bkpr_fwu_cnt = tamp_bkpr(TAMP_BOOT_FWU_INFO_REG_ID);
-	uint32_t try_cnt;
-
-	clk_enable(RTCAPB);
-	try_cnt = (mmio_read_32(bkpr_fwu_cnt) & TAMP_BOOT_FWU_INFO_CNT_MSK) >>
-		TAMP_BOOT_FWU_INFO_CNT_OFF;
-
-	assert(try_cnt <= FWU_MAX_TRIAL_REBOOT);
-
-	if (try_cnt != 0U) {
-		mmio_clrsetbits_32(bkpr_fwu_cnt, TAMP_BOOT_FWU_INFO_CNT_MSK,
-				   (try_cnt - 1U) << TAMP_BOOT_FWU_INFO_CNT_OFF);
-	}
-	clk_disable(RTCAPB);
-
-	return try_cnt;
-}
-
-void stm32_set_max_fwu_trial_boot_cnt(void)
-{
-	uintptr_t bkpr_fwu_cnt = tamp_bkpr(TAMP_BOOT_FWU_INFO_REG_ID);
-
-	clk_enable(RTCAPB);
-	mmio_clrsetbits_32(bkpr_fwu_cnt, TAMP_BOOT_FWU_INFO_CNT_MSK,
-			   (FWU_MAX_TRIAL_REBOOT << TAMP_BOOT_FWU_INFO_CNT_OFF) &
-			   TAMP_BOOT_FWU_INFO_CNT_MSK);
-	clk_disable(RTCAPB);
-}
-
-void stm32_clear_fwu_trial_boot_cnt(void)
-{
-	uintptr_t bkpr_fwu_cnt = tamp_bkpr(TAMP_BOOT_FWU_INFO_REG_ID);
-
-	clk_enable(RTCAPB);
-	mmio_clrbits_32(bkpr_fwu_cnt, TAMP_BOOT_FWU_INFO_CNT_MSK);
-	clk_disable(RTCAPB);
+	return tamp_bkpr(TAMP_BOOT_FWU_INFO_REG_ID);
 }
 #endif /* PSA_FWU_SUPPORT */

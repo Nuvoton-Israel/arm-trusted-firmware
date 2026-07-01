@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016-2024, ARM Limited and Contributors. All rights reserved.
+# Copyright (c) 2016-2025, Arm Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -74,7 +74,7 @@ BL31_SOURCES	+=	${RK_GIC_SOURCES}				\
 include lib/coreboot/coreboot.mk
 include lib/libfdt/libfdt.mk
 
-$(eval $(call add_define,PLAT_EXTRA_LD_SCRIPT))
+PLAT_EXTRA_LD_SCRIPT	:=	1
 
 # Enable workarounds for selected Cortex-A53 erratas.
 ERRATA_A53_855873	:=	1
@@ -104,9 +104,8 @@ export CCACHE_EXTRAFILES
 ${BUILD_PLAT}/bl31/pmu_fw.o: CCACHE_EXTRAFILES=$(RK3399M0FW):$(RK3399M0PMUFW)
 ${RK_PLAT_SOC}/drivers/pmu/pmu_fw.S: $(RK3399M0FW)
 
-$(eval $(call MAKE_PREREQ_DIR,${BUILD_M0},${BUILD_PLAT}))
 .PHONY: $(RK3399M0FW)
-$(RK3399M0FW): | ${BUILD_M0}
+$(RK3399M0FW): | $$(@D)/
 	$(MAKE) -C ${RK_PLAT_SOC}/drivers/m0 BUILD=$(abspath ${BUILD_PLAT}/m0)
 
 # Do not enable SVE

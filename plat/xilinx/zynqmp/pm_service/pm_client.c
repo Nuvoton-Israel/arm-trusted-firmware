@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2018, Arm Limited and Contributors. All rights reserved.
- * Copyright (c) 2022-2024, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -46,22 +46,22 @@ static uint32_t suspend_mode = PM_SUSPEND_MODE_STD;
 /* Order in pm_procs_all array must match cpu ids */
 static const struct pm_proc pm_procs_all[] = {
 	{
-		.node_id = NODE_APU_0,
+		.node_id = (uint32_t)NODE_APU_0,
 		.pwrdn_mask = APU_0_PWRCTL_CPUPWRDWNREQ_MASK,
 		.ipi = &apu_ipi,
 	},
 	{
-		.node_id = NODE_APU_1,
+		.node_id = (uint32_t)NODE_APU_1,
 		.pwrdn_mask = APU_1_PWRCTL_CPUPWRDWNREQ_MASK,
 		.ipi = &apu_ipi,
 	},
 	{
-		.node_id = NODE_APU_2,
+		.node_id = (uint32_t)NODE_APU_2,
 		.pwrdn_mask = APU_2_PWRCTL_CPUPWRDWNREQ_MASK,
 		.ipi = &apu_ipi,
 	},
 	{
-		.node_id = NODE_APU_3,
+		.node_id = (uint32_t)NODE_APU_3,
 		.pwrdn_mask = APU_3_PWRCTL_CPUPWRDWNREQ_MASK,
 		.ipi = &apu_ipi,
 	},
@@ -172,9 +172,11 @@ static enum pm_node_id irq_to_pm_node(uint32_t irq)
 /**
  * pm_client_set_wakeup_sources - Set all slaves with enabled interrupts as wake
  *                                sources in the PMU firmware.
+ * @flag: 0 - Call from secure source.
+ *	  1 - Call from non-secure source.
  *
  */
-static void pm_client_set_wakeup_sources(void)
+static void pm_client_set_wakeup_sources(uint32_t flag)
 {
 	uint32_t reg_num;
 	uint8_t pm_wakeup_nodes_set[NODE_MAX] = { 0 };
@@ -184,7 +186,7 @@ static void pm_client_set_wakeup_sources(void)
 	if (suspend_mode == PM_SUSPEND_MODE_POWER_OFF) {
 		enum pm_ret_status ret;
 
-		ret = pm_set_wakeup_source(NODE_APU, NODE_EXTERN, 1U);
+		ret = pm_set_wakeup_source(NODE_APU, NODE_EXTERN, 1U, flag);
 		/**
 		 * If NODE_EXTERN could not be set as wake source, proceed with
 		 * standard suspend (no one will wake the system otherwise)
@@ -198,17 +200,18 @@ static void pm_client_set_wakeup_sources(void)
 
 	for (reg_num = 0U; reg_num < NUM_GICD_ISENABLER; reg_num++) {
 		uint32_t base_irq = reg_num << ISENABLER_SHIFT;
-		uint32_t reg = mmio_read_32(isenabler1 + (reg_num << 2U));
+		uint32_t reg = mmio_read_32(isenabler1 + (uint64_t)(reg_num << 2U));
 
 		if (reg == 0) {
 			continue;
 		}
 
-		while (reg) {
+		while (reg != 0U) {
 			enum pm_node_id node;
-			uint32_t idx, ret, irq, lowest_set = reg & (-reg);
+			uint32_t idx, irq, lowest_set = reg & (-reg);
+			enum pm_ret_status ret;
 
-			idx = __builtin_ctz(lowest_set);
+			idx = (uint32_t)__builtin_ctz(lowest_set);
 			irq = base_irq + idx;
 
 			if (irq > IRQ_MAX) {
@@ -218,9 +221,9 @@ static void pm_client_set_wakeup_sources(void)
 			node = irq_to_pm_node(irq);
 			reg &= ~lowest_set;
 
-			if (node > NODE_UNKNOWN && node < NODE_MAX) {
+			if ((node > NODE_UNKNOWN) && (node < NODE_MAX)) {
 				if (pm_wakeup_nodes_set[node] == 0U) {
-					ret = pm_set_wakeup_source(NODE_APU, node, 1U);
+					ret = pm_set_wakeup_source(NODE_APU, node, 1U, flag);
 					pm_wakeup_nodes_set[node] = (ret == PM_RET_SUCCESS) ? 1U : 0U;
 				}
 			}
@@ -237,11 +240,13 @@ static void pm_client_set_wakeup_sources(void)
  */
 const struct pm_proc *pm_get_proc(uint32_t cpuid)
 {
+	const struct pm_proc *ret = NULL;
+
 	if (cpuid < ARRAY_SIZE(pm_procs_all)) {
-		return &pm_procs_all[cpuid];
+		ret = &pm_procs_all[cpuid];
 	}
 
-	return NULL;
+	return ret;
 }
 
 /**
@@ -253,12 +258,16 @@ const struct pm_proc *pm_get_proc(uint32_t cpuid)
  */
 static uint32_t pm_get_cpuid(enum pm_node_id nid)
 {
+	uint32_t ret = UNDEFINED_CPUID;
+
 	for (size_t i = 0; i < ARRAY_SIZE(pm_procs_all); i++) {
 		if (pm_procs_all[i].node_id == nid) {
-			return i;
+			ret = i;
+			break;
 		}
 	}
-	return UNDEFINED_CPUID;
+
+	return ret;
 }
 
 const struct pm_proc *primary_proc = &pm_procs_all[0];
@@ -267,44 +276,24 @@ const struct pm_proc *primary_proc = &pm_procs_all[0];
  * pm_client_suspend() - Client-specific suspend actions.
  * @proc: processor which need to suspend.
  * @state: desired suspend state.
+ * @flag: 0 - Call from secure source.
+ *	  1 - Call from non-secure source.
  *
  * This function should contain any PU-specific actions
  * required prior to sending suspend request to PMU
  * Actions taken depend on the state system is suspending to.
  *
  */
-void pm_client_suspend(const struct pm_proc *proc, uint32_t state)
+void pm_client_suspend(const struct pm_proc *proc, uint32_t state, uint32_t flag)
 {
 	bakery_lock_get(&pm_client_secure_lock);
 
 	if (state == PM_STATE_SUSPEND_TO_RAM) {
-		pm_client_set_wakeup_sources();
+		pm_client_set_wakeup_sources(flag);
 	}
 
 	/* Set powerdown request */
 	mmio_write_32(APU_PWRCTL, mmio_read_32(APU_PWRCTL) | proc->pwrdn_mask);
-
-	bakery_lock_release(&pm_client_secure_lock);
-}
-
-
-/**
- * pm_client_abort_suspend() - Client-specific abort-suspend actions.
- *
- * This function should contain any PU-specific actions
- * required for aborting a prior suspend request.
- *
- */
-void pm_client_abort_suspend(void)
-{
-	/* Enable interrupts at processor level (for current cpu) */
-	gicv2_cpuif_enable();
-
-	bakery_lock_get(&pm_client_secure_lock);
-
-	/* Clear powerdown request */
-	mmio_write_32(APU_PWRCTL,
-		 mmio_read_32(APU_PWRCTL) & ~primary_proc->pwrdn_mask);
 
 	bakery_lock_release(&pm_client_secure_lock);
 }
@@ -320,28 +309,30 @@ void pm_client_abort_suspend(void)
 void pm_client_wakeup(const struct pm_proc *proc)
 {
 	uint32_t cpuid = pm_get_cpuid(proc->node_id);
+	uint32_t val;
 
-	if (cpuid == UNDEFINED_CPUID) {
-		return;
+	if (cpuid != UNDEFINED_CPUID) {
+		bakery_lock_get(&pm_client_secure_lock);
+
+		/* clear powerdown bit for affected cpu */
+		val = mmio_read_32(APU_PWRCTL);
+
+		val &= ~(proc->pwrdn_mask);
+		mmio_write_32(APU_PWRCTL, val);
+
+		bakery_lock_release(&pm_client_secure_lock);
 	}
-
-	bakery_lock_get(&pm_client_secure_lock);
-
-	/* clear powerdown bit for affected cpu */
-	uint32_t val = mmio_read_32(APU_PWRCTL);
-	val &= ~(proc->pwrdn_mask);
-	mmio_write_32(APU_PWRCTL, val);
-
-	bakery_lock_release(&pm_client_secure_lock);
 }
 
 enum pm_ret_status pm_set_suspend_mode(uint32_t mode)
 {
-	if ((mode != PM_SUSPEND_MODE_STD) &&
-	    (mode != PM_SUSPEND_MODE_POWER_OFF)) {
-		return PM_RET_ERROR_ARGS;
+	enum pm_ret_status suspend_mode_status = PM_RET_ERROR_ARGS;
+
+	if ((mode == PM_SUSPEND_MODE_STD) ||
+	    (mode == PM_SUSPEND_MODE_POWER_OFF)) {
+		suspend_mode = mode;
+		suspend_mode_status = PM_RET_SUCCESS;
 	}
 
-	suspend_mode = mode;
-	return PM_RET_SUCCESS;
+	return suspend_mode_status;
 }

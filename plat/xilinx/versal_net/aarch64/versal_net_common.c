@@ -1,11 +1,12 @@
 /*
  * Copyright (c) 2021-2022, Arm Limited and Contributors. All rights reserved.
  * Copyright (c) 2018-2022, Xilinx, Inc. All rights reserved.
- * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
+#include <common/ep_info.h>
 #include <common/debug.h>
 #include <common/runtime_svc.h>
 #include <drivers/generic_delay_timer.h>
@@ -14,6 +15,8 @@
 #include <plat/common/platform.h>
 #include <plat_common.h>
 #include <plat_ipi.h>
+#include <pm_api_sys.h>
+#include <pm_defs.h>
 
 #include <plat_private.h>
 #include <versal_net_def.h>
@@ -42,29 +45,37 @@ const mmap_region_t *plat_get_mmap(void)
 /* For saving cpu clock for certain platform */
 uint32_t cpu_clock;
 
-char *board_name_decode(void)
+const char *board_name_decode(void)
 {
+	const char *platform;
+
 	switch (platform_id) {
 	case VERSAL_NET_SPP:
-		return "IPP";
+		platform = "IPP";
+		break;
 	case VERSAL_NET_EMU:
-		return "EMU";
+		platform = "EMU";
+		break;
 	case VERSAL_NET_SILICON:
-		return "Silicon";
+		platform = "Silicon";
+		break;
 	case VERSAL_NET_QEMU:
-		return "QEMU";
+		platform = "QEMU";
+		break;
 	default:
-		return "Unknown";
+		platform = "Unknown";
 	}
+
+	return platform;
 }
 
 void board_detection(void)
 {
-	uint32_t version;
+	uint32_t version_type;
 
-	version = mmio_read_32(PMC_TAP_VERSION);
-	platform_id = FIELD_GET(PLATFORM_MASK, version);
-	platform_version = FIELD_GET(PLATFORM_VERSION_MASK, version);
+	version_type = mmio_read_32(PMC_TAP_VERSION);
+	platform_id = FIELD_GET(PLATFORM_MASK, version_type);
+	platform_version = FIELD_GET(PLATFORM_VERSION_MASK, version_type);
 
 	if (platform_id == VERSAL_NET_QEMU_COSIM) {
 		platform_id = VERSAL_NET_QEMU;
@@ -149,3 +160,27 @@ void syscnt_freq_config_setup(void)
 		      IOU_SCNTRS_CONTROL_EN);
 }
 
+/*
+ * Get bootmode register value via IPI call.
+ */
+#if DEBUG
+void get_boot_mode(uint32_t *mode)
+{
+	enum pm_ret_status ret_status;
+
+	if (mode != NULL) {
+		ret_status = pm_handle_eemi_call(SECURE, PM_IOCTL, CRP_BOOT_MODE_REG_NODE,
+						 IOCTL_READ_REG, CRP_BOOT_MODE_REG_OFFSET,
+						 0, 0, mode);
+
+		if (ret_status == PM_RET_SUCCESS) {
+			INFO("bootmode: %u\n", *mode);
+		} else {
+			*mode = BOOT_MODE_INVALID;
+			INFO("Failed to retrieve boot mode reg value via IPI.\n");
+		}
+	}
+
+	return;
+}
+#endif

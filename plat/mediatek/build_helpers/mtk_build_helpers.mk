@@ -27,12 +27,10 @@ endef
 # Determine option variable is defined or not then define it
 define add_defined_option
 ifdef $(1)
-ifeq ($(findstring $(value $(1)), $(uppercase_table)),)
-DEFINES += -D$(1)$(if $(value $(1)),=$(value $(1)),)
-else
 ifeq ($(strip $(value $(1))),y)
 DEFINES += -D$(1)$(if $(value $(1)),=1,)
-endif
+else ifneq ($(strip $(value $(1))),n)
+DEFINES += -D$(1)$(if $(value $(1)),=$(value $(1)),)
 endif
 endif
 endef
@@ -73,17 +71,9 @@ define MAKE_MODULE
         $(eval SOURCES    := $(2))
         $(eval OBJS_TEMP  := $(addprefix $(BUILD_DIR)/$(MODULE)/,$(call SOURCES_TO_OBJS,$(SOURCES))))
         $(eval MODULE_OBJS += $(OBJS_TEMP))
-        # We use sort only to get a list of unique object directory names.
-        # ordering is not relevant but sort removes duplicates.
-        $(eval TEMP_OBJ_DIRS := $(sort $(dir ${OBJS_TEMP} ${LINKERFILE})))
-        # The $(dir ) function leaves a trailing / on the directory names
-        # Rip off the / to match directory names with make rule targets.
-        $(eval OBJ_DIRS := $(patsubst %/,%,$(TEMP_OBJ_DIRS)))
+        $(eval BL         := $(call uppercase,$(3)))
 
-$(eval $(foreach objd,${OBJ_DIRS},$(call MAKE_PREREQ_DIR,${objd},${BUILD_DIR})))
-${3}_dirs: | ${OBJ_DIRS}
-
-$(eval $(call MAKE_OBJS,$(BUILD_DIR)/$(MODULE),$(SOURCES),${3}))
+$(eval $(call MAKE_OBJS,$(BUILD_DIR)/$(MODULE),$(SOURCES),${3},$(BL)))
 
 libraries: $(OBJS_TEMP)
 endef

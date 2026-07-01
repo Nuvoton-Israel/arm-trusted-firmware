@@ -1,8 +1,12 @@
 #
-# Copyright (c) 2015-2024, Arm Limited and Contributors. All rights reserved.
+# Copyright (c) 2015-2025, Arm Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
+
+# Extra partitions used to find FIP, contains:
+# metadata (2) and the FIP partitions (default is 2).
+STM32_EXTRA_PARTS	:=	4
 
 include plat/st/common/common.mk
 
@@ -12,6 +16,8 @@ USE_COHERENT_MEM	:=	0
 
 # Default Device tree
 DTB_FILE_NAME		?=	stm32mp157c-ev1.dtb
+
+TF_CFLAGS 		+=	-DSTM32MP1X
 
 STM32MP13		?=	0
 STM32MP15		?=	0
@@ -80,31 +86,14 @@ endif
 WORKAROUND_CVE_2017_5715:=	0
 WORKAROUND_CVE_2022_23960:=	0
 
-# Number of TF-A copies in the device
-STM32_TF_A_COPIES		:=	2
-
-# PLAT_PARTITION_MAX_ENTRIES must take care of STM32_TF-A_COPIES and other partitions
-# such as metadata (2) to find all the FIP partitions (default is 2).
-PLAT_PARTITION_MAX_ENTRIES	:=	$(shell echo $$(($(STM32_TF_A_COPIES) + 4)))
-
-ifeq (${PSA_FWU_SUPPORT},1)
-# Number of banks of updatable firmware
-NR_OF_FW_BANKS			:=	2
-NR_OF_IMAGES_IN_FW_BANK		:=	1
-
-FWU_MAX_PART = $(shell echo $$(($(STM32_TF_A_COPIES) + 2 + $(NR_OF_FW_BANKS))))
-ifeq ($(shell test $(FWU_MAX_PART) -gt $(PLAT_PARTITION_MAX_ENTRIES); echo $$?),0)
-$(error "Required partition number is $(FWU_MAX_PART) where PLAT_PARTITION_MAX_ENTRIES is only \
-$(PLAT_PARTITION_MAX_ENTRIES)")
-endif
-endif
-
 ifeq ($(STM32MP13),1)
 STM32_HASH_VER		:=	4
 STM32_RNG_VER		:=	4
+STM32_RNG_VER_MINOR	:=	2
 else # Assuming STM32MP15
 STM32_HASH_VER		:=	2
 STM32_RNG_VER		:=	2
+STM32_RNG_VER_MINOR	:=	1
 endif
 
 # Download load address for serial boot devices
@@ -120,6 +109,11 @@ FDT_SOURCES		:=	$(addprefix ${BUILD_PLAT}/fdts/, $(patsubst %.dtb,%-bl2.dts,$(DT
 ifeq ($(AARCH32_SP),sp_min)
 BL32_DTSI		:=	stm32mp15-bl32.dtsi
 FDT_SOURCES		+=	$(addprefix ${BUILD_PLAT}/fdts/, $(patsubst %.dtb,%-bl32.dts,$(DTB_FILE_NAME)))
+ifneq (,$(wildcard $(patsubst %.dtb,fdts/%-sp_min.dts,$(DTB_FILE_NAME))))
+ifeq (,$(findstring -sp_min,$(DTB_FILE_NAME)))
+SP_EXT			:=	-sp_min
+endif
+endif
 endif
 endif
 
@@ -170,6 +164,7 @@ $(eval $(call assert_numerics,\
 		STM32_HASH_VER \
 		STM32_HEADER_VERSION_MAJOR \
 		STM32_RNG_VER \
+		STM32_RNG_VER_MINOR \
 		STM32_TF_A_COPIES \
 )))
 
@@ -183,6 +178,7 @@ $(eval $(call add_defines,\
 		STM32_HASH_VER \
 		STM32_HEADER_VERSION_MAJOR \
 		STM32_RNG_VER \
+		STM32_RNG_VER_MINOR \
 		STM32_TF_A_COPIES \
 		STM32MP_CRYPTO_ROM_LIB \
 		STM32MP_DDR_32BIT_INTERFACE \
@@ -228,12 +224,12 @@ endif
 BL2_SOURCES		+=	plat/st/stm32mp1/plat_bl2_mem_params_desc.c		\
 				plat/st/stm32mp1/stm32mp1_fconf_firewall.c
 
-ifeq (${PSA_FWU_SUPPORT},1)
-include drivers/fwu/fwu.mk
-endif
-
 BL2_SOURCES		+=	drivers/st/crypto/stm32_hash.c				\
 				plat/st/stm32mp1/bl2_plat_setup.c
+
+ifeq ($(STM32MP13),1)
+BL2_SOURCES		+=	drivers/st/mce/stm32_mce.c
+endif
 
 ifeq (${TRUSTED_BOARD_BOOT},1)
 ifeq ($(STM32MP13),1)
@@ -272,13 +268,15 @@ endif
 BL2_SOURCES		+=	drivers/st/ddr/stm32mp1_ddr.c				\
 				drivers/st/ddr/stm32mp1_ram.c
 
+BL2_SOURCES		+=	plat/st/stm32mp1/plat_ddr.c
+
 ifeq ($(AARCH32_SP),sp_min)
 # Create DTB file for BL32
-${BUILD_PLAT}/fdts/%-bl32.dts: fdts/%.dts fdts/${BL32_DTSI} | ${BUILD_PLAT} fdt_dirs
-	@echo '#include "$(patsubst fdts/%,%,$<)"' > $@
-	@echo '#include "${BL32_DTSI}"' >> $@
+${BUILD_PLAT}/fdts/%-bl32.dts: fdts/%.dts fdts/${BL32_DTSI} | $$(@D)/
+	$(q)echo '#include "$(patsubst %.dts,%$(SP_EXT).dts,$(patsubst fdts/%,%,$<))"' > $@
+	$(q)echo '#include "${BL32_DTSI}"' >> $@
 
-${BUILD_PLAT}/fdts/%-bl32.dtb: ${BUILD_PLAT}/fdts/%-bl32.dts
+${BUILD_PLAT}/fdts/%-bl32.dtb: ${BUILD_PLAT}/fdts/%-bl32.dts | $$(@D)/
 endif
 
 include plat/st/common/common_rules.mk

@@ -7,6 +7,7 @@ Platform Ports
    :hidden:
 
    allwinner
+   amd-versal2
    arm/index
    ast2700
    meson-axg
@@ -21,8 +22,10 @@ Platform Ports
    mt8183
    mt8186
    mt8188
+   mt8189
    mt8192
    mt8195
+   mt8196
    nvidia-tegra
    warp7
    imx8
@@ -35,8 +38,7 @@ Platform Ports
    poplar
    qemu
    qemu-sbsa
-   qti
-   qti-msm8916
+   qti/index
    rpi3
    rpi4
    rpi5
@@ -61,8 +63,6 @@ documentation associated with them.
    currently have associated documentation:
 
    - Arm Neoverse N1 System Development Platform (N1SDP)
-   - Arm Neoverse Reference Design N1 Edge (RD-N1-Edge) FVP
-   - Arm SGI-575
    - MediaTek MT8173 SoCs
 
 Deprecated platforms
@@ -71,10 +71,10 @@ Deprecated platforms
 +----------------+----------------+--------------------+--------------------+
 |    Platform    |     Vendor     | Deprecated version |  Deleted version   |
 +================+================+====================+====================+
-| None at this   |                |                    |                    |
-| time.          |                |                    |                    |
+|    RD1AE       |      Arm       |        2.14        |         TBD        |
+|                |                |                    |                    |
 +----------------+----------------+--------------------+--------------------+
 
 --------------
 
-*Copyright (c) 2019-2024, Arm Limited. All rights reserved.*
+*Copyright (c) 2019-2025, Arm Limited. All rights reserved.*

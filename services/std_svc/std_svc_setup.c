@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2023, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2014-2025, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -15,6 +15,7 @@
 #include <lib/runtime_instr.h>
 #include <services/drtm_svc.h>
 #include <services/errata_abi_svc.h>
+#include <services/lfa_svc.h>
 #include <services/pci_svc.h>
 #include <services/rmmd_svc.h>
 #include <services/sdei.h>
@@ -66,7 +67,7 @@ static int32_t std_svc_setup(void)
 
 #if ENABLE_RME
 	if (rmmd_setup() != 0) {
-		ret = 1;
+		WARN("RMMD setup failed. Continuing boot.\n");
 	}
 #endif
 
@@ -86,6 +87,15 @@ static int32_t std_svc_setup(void)
 	}
 #endif /* DRTM_SUPPORT */
 
+#if LFA_SUPPORT
+	/*
+	 * Setup/Initialize resources useful during LFA
+	 */
+	if (lfa_setup() != 0) {
+		ret = 1;
+	}
+#endif /* LFA_SUPPORT */
+
 	return ret;
 }
 
@@ -94,14 +104,19 @@ static int32_t std_svc_setup(void)
  * calls to PSCI SMC handler
  */
 static uintptr_t std_svc_smc_handler(uint32_t smc_fid,
-			     u_register_t x1,
-			     u_register_t x2,
-			     u_register_t x3,
-			     u_register_t x4,
+			     u_register_t x1_arg,
+			     u_register_t x2_arg,
+			     u_register_t x3_arg,
+			     u_register_t x4_arg,
 			     void *cookie,
 			     void *handle,
 			     u_register_t flags)
 {
+	u_register_t x1 = x1_arg;
+	u_register_t x2 = x2_arg;
+	u_register_t x3 = x3_arg;
+	u_register_t x4 = x4_arg;
+
 	if (((smc_fid >> FUNCID_CC_SHIFT) & FUNCID_CC_MASK) == SMC_32) {
 		/* 32-bit SMC function, clear top parameter bits */
 
@@ -211,6 +226,13 @@ static uintptr_t std_svc_smc_handler(uint32_t smc_fid,
 					flags);
 	}
 #endif /* DRTM_SUPPORT */
+
+#if LFA_SUPPORT
+	if (is_lfa_fid(smc_fid)) {
+		return lfa_smc_handler(smc_fid, x1, x2, x3, x4, cookie, handle, flags);
+	}
+#endif /* LFA_SUPPORT */
+
 
 	switch (smc_fid) {
 	case ARM_STD_SVC_CALL_COUNT:

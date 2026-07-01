@@ -1,23 +1,16 @@
 #
-# Copyright (c) 2015-2024, Arm Limited and Contributors. All rights reserved.
+# Copyright (c) 2015-2025, Arm Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
-PLAT		:= none
-V		?= 0
-DEBUG		:= 0
-CRTTOOL		?= cert_create${BIN_EXT}
-BINARY		:= $(notdir ${CRTTOOL})
-COT		:= tbbr
-
-toolchains := host
-
 MAKE_HELPERS_DIRECTORY := ../../make_helpers/
 include ${MAKE_HELPERS_DIRECTORY}build_macros.mk
-include ${MAKE_HELPERS_DIRECTORY}build_env.mk
+include ${MAKE_HELPERS_DIRECTORY}build-rules.mk
+include ${MAKE_HELPERS_DIRECTORY}common.mk
 include ${MAKE_HELPERS_DIRECTORY}defaults.mk
 include ${MAKE_HELPERS_DIRECTORY}toolchain.mk
+include ${MAKE_HELPERS_DIRECTORY}utilities.mk
 
 ifneq (${PLAT},none)
 TF_PLATFORM_ROOT	:=	../../plat/
@@ -26,12 +19,12 @@ PLAT_CERT_CREATE_HELPER_MK := ${PLAT_DIR}/cert_create_tbbr.mk
 endif
 
 # Common source files.
-OBJECTS := src/cert.o \
-           src/cmd_opt.o \
-           src/ext.o \
-           src/key.o \
-           src/main.o \
-           src/sha.o
+CRTTOOL_SOURCES	:= src/cert.c \
+		src/cmd_opt.c \
+		src/ext.c \
+		src/key.c \
+		src/main.c \
+		src/sha.c
 
 # Chain of trust.
 ifeq (${COT},tbbr)
@@ -52,28 +45,24 @@ endif
 # from setting the OPENSSL_DIR path.
 $(eval $(call SELECT_OPENSSL_API_VERSION))
 
-HOSTCCFLAGS := -Wall -std=c99
+CRTTOOL_CFLAGS := -Wall -std=c99
 
 ifeq (${DEBUG},1)
-  HOSTCCFLAGS += -g -O0 -DDEBUG -DLOG_LEVEL=40
+  CRTTOOL_DEFINES += DEBUG LOG_LEVEL=40
+  CRTTOOL_CFLAGS+= -g -O0
 else
-  HOSTCCFLAGS += -O2 -DLOG_LEVEL=20
+  CRTTOOL_DEFINES += LOG_LEVEL=20
+  CRTTOOL_CFLAGS += -O2
 endif
 
-ifeq (${V},0)
-  Q := @
-else
-  Q :=
-endif
-
-HOSTCCFLAGS += ${DEFINES}
+CRTTOOL_DEFINES += PLAT_MSG=$(call escape-shell,"$(PLAT_MSG)")
 # USING_OPENSSL3 flag will be added to the HOSTCCFLAGS variable with the proper
 # computed value.
-HOSTCCFLAGS += -DUSING_OPENSSL3=$(USING_OPENSSL3)
+CRTTOOL_DEFINES += USING_OPENSSL3=$(USING_OPENSSL3)
 
 # Make soft links and include from local directory otherwise wrong headers
 # could get pulled in from firmware tree.
-INC_DIR += -I ./include -I ${PLAT_INCLUDE} -I ${OPENSSL_DIR}/include
+CRTTOOL_INCLUDE_DIRS += ./include ${PLAT_INCLUDE} ${OPENSSL_DIR}/include
 
 # Include library directories where OpenSSL library files are located.
 # For a normal installation (i.e.: when ${OPENSSL_DIR} = /usr or
@@ -81,31 +70,21 @@ INC_DIR += -I ./include -I ${PLAT_INCLUDE} -I ${OPENSSL_DIR}/include
 # directory. However, for a local build of OpenSSL, the built binaries are
 # located under the main project directory (i.e.: ${OPENSSL_DIR}, not
 # ${OPENSSL_DIR}/lib/).
-LIB_DIR := -L ${OPENSSL_DIR}/lib -L ${OPENSSL_DIR}
-LIB := -lssl -lcrypto
+CRTTOOL_LDFLAGS += -L ${OPENSSL_DIR}/lib -L ${OPENSSL_DIR}
+CRTTOOL_LDFLAGS += -lssl -lcrypto
 
 .PHONY: all clean realclean --openssl
 
-all: --openssl ${BINARY}
+$(eval $(call MAKE_TOOL,$(BUILD_PLAT)/tools,cert_create,CRTTOOL))
 
-${BINARY}: ${OBJECTS} Makefile
-	@echo "  HOSTLD  $@"
-	@echo 'const char build_msg[] = "Built : "__TIME__", "__DATE__; \
-                const char platform_msg[] = "${PLAT_MSG}";' | \
-                $(host-cc) -c ${HOSTCCFLAGS} -xc - -o src/build_msg.o
-	${Q}$(host-cc) src/build_msg.o ${OBJECTS} ${LIB_DIR} ${LIB} -o $@
-
-%.o: %.c
-	@echo "  HOSTCC  $<"
-	${Q}$(host-cc) -c ${HOSTCCFLAGS} ${INC_DIR} $< -o $@
+all: --openssl
 
 --openssl:
 ifeq ($(DEBUG),1)
-	@echo "Selected OpenSSL version: ${OPENSSL_CURRENT_VER}"
+	$(s)echo "Selected OpenSSL version: ${OPENSSL_CURRENT_VER}"
 endif
 
 clean:
-	$(call SHELL_DELETE_ALL, src/build_msg.o ${OBJECTS})
+	$(q)rm -rf $(BUILD_PLAT)/tools/cert_create
 
 realclean: clean
-	$(call SHELL_DELETE,${BINARY})

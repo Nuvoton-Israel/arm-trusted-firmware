@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2021-2022, ARM Limited and Contributors. All rights reserved.
- * Copyright (c) 2021-2022, MediaTek Inc. All rights reserved.
+ * Copyright (c) 2021-2024, ARM Limited and Contributors. All rights reserved.
+ * Copyright (c) 2021-2024, MediaTek Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -77,11 +77,18 @@
 #define MSDC0_BASE		(IO_PHYS + 0x01230000)
 
 /*******************************************************************************
+ * TRNG related constants
+ ******************************************************************************/
+#define TRNG_BASE		(IO_PHYS + 0x0020F000)
+
+/*******************************************************************************
  * GIC-600 & interrupt handling related constants
  ******************************************************************************/
 /* Base MTK_platform compatible GIC memory map */
 #define BASE_GICD_BASE		MT_GIC_BASE
 #define MT_GIC_RDIST_BASE	(MT_GIC_BASE + 0x40000)
+
+#define PLAT_MTK_G1S_IRQ_PROPS(grp)
 
 #define SYS_CIRQ_BASE		(IO_PHYS + 0x204000)
 #define CIRQ_REG_NUM		(11)

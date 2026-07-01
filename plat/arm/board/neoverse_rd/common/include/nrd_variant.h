@@ -1,21 +1,11 @@
 /*
- * Copyright (c) 2018-2024, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2018-2025, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
 #ifndef NRD_VARIANT_H
 #define NRD_VARIANT_H
-
-/* SSC_VERSION values for SGI575 */
-#define SGI575_SSC_VER_PART_NUM			0x0783
-
-/* SID Version values for RD-N1E1-Edge */
-#define RD_N1E1_EDGE_SID_VER_PART_NUM		0x0786
-#define RD_E1_EDGE_CONFIG_ID			0x2
-
-/* SID Version values for RD-V1 */
-#define RD_V1_SID_VER_PART_NUM			0x078a
 
 /* SID Version values for RD-N2 */
 #define RD_N2_SID_VER_PART_NUM			0x07B7
@@ -27,6 +17,14 @@
 /* SID Version values for RD-V2 */
 #define RD_V2_SID_VER_PART_NUM			0x07F2
 #define RD_V2_CONFIG_ID				0x1
+
+/* SID Version values for RD-V3 */
+#define RD_V3_SID_VER_PART_NUM		0x07EE
+#define RD_V3_CONFIG_ID			0x0
+
+/* SID Version values for RD-V3 variants */
+#define RD_V3_CFG1_SID_VER_PART_NUM	0x07F9
+#define RD_V3_CFG2_SID_VER_PART_NUM	0x07EE
 
 /* Structure containing Neoverse RD platform variant information */
 typedef struct nrd_platform_info {

@@ -125,7 +125,7 @@ MARVELL_DRV		:= 	$(MARVELL_DRV_BASE)/io_win.c	\
 				$(MARVELL_DRV_BASE)/secure_dfx_access/armada_thermal.c	\
 				$(MARVELL_DRV_BASE)/secure_dfx_access/misc_dfx.c	\
 				$(MARVELL_DRV_BASE)/ddr_phy_access.c	\
-				drivers/rambus/trng_ip_76.c
+				$(MARVELL_DRV_BASE)/trng.c
 
 ifeq (${MSS_SUPPORT}, 1)
 MARVELL_DRV		+=	$(MARVELL_DRV_BASE)/mg_conf_cm3/mg_conf_cm3.c
@@ -176,17 +176,17 @@ clean realclean distclean: mrvl_clean
 
 .PHONY: mrvl_clean
 mrvl_clean:
-	@echo "  Doimage CLEAN"
-	${Q}${MAKE} PLAT=${PLAT} --no-print-directory -C ${DOIMAGEPATH} clean
+	$(s)echo "  Doimage CLEAN"
+	$(q)${MAKE} PLAT=${PLAT} --no-print-directory -C ${DOIMAGEPATH} clean
 
 ${DOIMAGETOOL}: FORCE
-	@$(DOIMAGE_LIBS_CHECK)
-	${Q}${MAKE} --no-print-directory -C ${DOIMAGEPATH}
+	$(q)$(DOIMAGE_LIBS_CHECK)
+	$(q)${MAKE} --no-print-directory -C ${DOIMAGEPATH}
 
 ${BUILD_PLAT}/${FLASH_IMAGE}: ${ROM_BIN_EXT} ${BUILD_PLAT}/${BOOT_IMAGE} ${DOIMAGETOOL}
-	@${ECHO_BLANK_LINE}
-	@echo "Building flash image"
-	${Q}${DOIMAGETOOL} ${DOIMAGE_FLAGS} ${BUILD_PLAT}/${BOOT_IMAGE} ${BUILD_PLAT}/${FLASH_IMAGE}
-	@${ECHO_BLANK_LINE}
-	@echo "Built $@ successfully"
-	@${ECHO_BLANK_LINE}
+	$(s)echo
+	$(s)echo "Building flash image"
+	$(q)${DOIMAGETOOL} ${DOIMAGE_FLAGS} ${BUILD_PLAT}/${BOOT_IMAGE} ${BUILD_PLAT}/${FLASH_IMAGE}
+	$(s)echo
+	$(s)echo "Built $@ successfully"
+	$(s)echo

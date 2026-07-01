@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023, MediaTek Inc. All rights reserved.
+# Copyright (c) 2022-2025, MediaTek Inc. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -13,6 +13,7 @@ include drivers/arm/gic/v3/gicv3.mk
 include lib/xlat_tables_v2/xlat_tables.mk
 
 PLAT_INCLUDES := -I${MTK_PLAT}/common \
+		 -I${MTK_PLAT}/common/include \
 		 -I${MTK_PLAT}/include \
 		 -I${MTK_PLAT}/include/${ARCH_VERSION} \
 		 -I${MTK_PLAT} \
@@ -39,6 +40,9 @@ MODULES-y += $(MTK_PLAT)/drivers/mcusys
 MODULES-y += $(MTK_PLAT)/drivers/pmic
 MODULES-y += $(MTK_PLAT)/drivers/pmic_wrap
 MODULES-y += $(MTK_PLAT)/drivers/ptp3
+ifeq (${TRNG_SUPPORT},1)
+MODULES-y += $(MTK_PLAT)/drivers/rng
+endif
 MODULES-y += $(MTK_PLAT)/drivers/rtc
 MODULES-y += $(MTK_PLAT)/drivers/spm
 MODULES-y += $(MTK_PLAT)/drivers/timer

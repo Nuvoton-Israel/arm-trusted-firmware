@@ -35,7 +35,7 @@ TF-A version is given in Makefile, through several macros:
 
 For example, TF-A v2.10 has VERSION_MAJOR=2, VERSION_MINOR=10 and VERSION_PATCH=0.
 
-This VERSION_PATCH macro is only increased for LTS releases.
+This VERSION_PATCH macro is only increased for :ref:`LTS - Long-Term Support` releases.
 
 Upcoming Releases
 ~~~~~~~~~~~~~~~~~
@@ -70,6 +70,14 @@ depending on project requirement and partner feedback.
 +-----------------+---------------------------+------------------------------+
 | v2.11           | 4th week of May '24       | 2nd week of May '24          |
 +-----------------+---------------------------+------------------------------+
+| v2.12           | 4th week of Nov '24       | 2nd week of Nov '24          |
++-----------------+---------------------------+------------------------------+
+| v2.13           | 4th week of May '25       | 2nd week of May '25          |
++-----------------+---------------------------+------------------------------+
+| v2.14           | 4th week of Nov '25       | 2nd week of Nov '25          |
++-----------------+---------------------------+------------------------------+
+| v2.15           | 4th week of May '26       | 2nd week of May '26          |
++-----------------+---------------------------+------------------------------+
 
 Removal of Deprecated Interfaces
 --------------------------------
@@ -102,18 +110,18 @@ after which it will be removed.
 +--------------------------------+-------------+---------+---------------------------------------------------------+
 
 Build Options deprecated/removed
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--------------------------------
 
 Populated table provides details about build options that were removed or deprecated.
 
 +-----------------------+--------------------------------+
 | Build Option          | Deprecated from TF-A Version   |
 +=======================+================================+
-| CTX_INCLUDE_MTE_REGS  | 2.11                           |
+| NS_TIMER_SWITCH       | v2.14.0                        |
 +-----------------------+--------------------------------+
-| ENABLE_FEAT_MTE       | 2.11                           |
+| SPM_MM                | v2.14.0                        |
 +-----------------------+--------------------------------+
 
 --------------
 
-*Copyright (c) 2018-2024, Arm Limited and Contributors. All rights reserved.*
+*Copyright (c) 2018-2025, Arm Limited and Contributors. All rights reserved.*

@@ -98,14 +98,14 @@ feature set, and thereby save and restore the configuration associated with them
 
 4. **Dynamic discovery of Feature enablement by EL3**
 
-TF-A supports three states for feature enablement at EL3, to make them available
+TF-A supports four states for feature enablement at EL3, to make them available
 for lower exception levels.
 
 .. code:: c
 
-	#define FEAT_STATE_DISABLED	0
-	#define FEAT_STATE_ENABLED	1
-	#define FEAT_STATE_CHECK	2
+	#define FEAT_STATE_DISABLED     	0
+	#define FEAT_STATE_ENABLED      	1
+	#define FEAT_STATE_CHECK        	2
 
 A pattern is established for feature enablement behavior.
 Each feature must support the 3 possible values with rigid semantics.
@@ -119,7 +119,27 @@ Each feature must support the 3 possible values with rigid semantics.
 - **FEAT_STATE_CHECK** - same as ``FEAT_STATE_ALWAYS`` except that the feature's
   existence will be checked at runtime. Default on dynamic platforms (example: FVP).
 
-.. note::
+ .. note::
+
+   In general, it is assumed that all cores will support the same set of
+   architectural features (features will be symmetrical). However, there are
+   cases where this is impractical to achieve. Only some features can be
+   mismatched among cores and this is the exception rather than the rule. This
+   is due to the fact that Operating systems are designed for SMP systems. There
+   are no clear guidelines what kind of mismatch is allowed but following
+   pointers can help in making a decision:
+
+    - All mandatory features must be symmetric.
+    - Any feature that impacts the generation of page tables must be symmetric.
+    - Any feature access which does not trap to EL3 should be symmetric.
+    - Features related with profiling, debug and trace could be asymmetric
+    - Migration of vCPU/tasks between CPUs should not cause an error
+
+   TF-A caters for mismatched features, however, this is not regularly tested
+   for all features and may not work as expected, even without considering OS
+   support.
+
+ .. note::
    ``FEAT_RAS`` is an exception here, as it impacts the execution of EL3 and
    it is essential to know its presence at compile time. Refer to ``ENABLE_FEAT``
    macro under :ref:`Build Options` section for more details.
@@ -202,6 +222,9 @@ the Non-Secure, Realm and Secure security state context structures as listed bel
 	....
 	....
 
+	#if (ENABLE_FEAT_IDTE3 && defined(__aarch64__))
+	percpu_idregs_t idregs[CPU_CONTEXT_NUM];
+	#endif
 	}cpu_data_t;
 
 |CPU Data Structure|
@@ -210,6 +233,18 @@ At runtime, ``cpu_context[CPU_DATA_CONTEXT_NUM]`` array will be intitialised wit
 the Secure, Non-Secure and Realm context structure addresses to ensure proper
 handling of the register state.
 See :ref:`Library APIs` section for more details.
+
+When FEAT_IDTE3 is enabled, the ID registers ID_AA64DFR0_EL1 and
+ID_AA64DFR1_EL1 are cached in the
+percpu_idregs_t idregs[CPU_CONTEXT_NUM] array within the CPU data
+structure. These cached copies are used to service trapped reads of the
+corresponding registers from lower exception levels. Because debug and
+trace features can vary across CPUs, these ID registers are cached
+per-CPU and per-world to accurately represent asymmetric
+configurations.
+
+The per-cpu cached ID registers are initialized in ``psci_arch_setup()``
+via ``cm_init_percpu_once_regs()``.
 
 CPU Context and Memory allocation
 =================================
@@ -224,25 +259,22 @@ state of CPU across exception levels for a given security state are listed below
 	typedef struct cpu_context {
 	gp_regs_t gpregs_ctx;
 	el3_state_t el3state_ctx;
-	el1_sysregs_t el1_sysregs_ctx;
-
-	#if CTX_INCLUDE_EL2_REGS
-	el2_sysregs_t el2_sysregs_ctx;
-	#endif
-
-	#if CTX_INCLUDE_FPREGS
-	fp_regs_t fpregs_ctx;
-	#endif
 
 	cve_2018_3639_t cve_2018_3639_ctx;
+
+	#if ERRATA_SPECULATIVE_AT
+	errata_speculative_at_t errata_speculative_at_ctx;
+	#endif
+
 	#if CTX_INCLUDE_PAUTH_REGS
 	pauth_t pauth_ctx;
 	#endif
 
-	#if CTX_INCLUDE_MPAM_REGS
-	mpam_t	mpam_ctx;
+	#if (CTX_INCLUDE_EL2_REGS && IMAGE_BL31)
+	el2_sysregs_t el2_sysregs_ctx;
+	#else
+	el1_sysregs_t el1_sysregs_ctx;
 	#endif
-
 	} cpu_context_t;
 
 Context Memory Allocation
@@ -262,7 +294,7 @@ handles memory allocation for ``Non-Secure`` world context for all CPUs.
 
 .. code:: c
 
-	static cpu_context_t psci_ns_context[PLATFORM_CORE_COUNT];
+	static PER_CPU_DEFINE(cpu_context_t, psci_ns_context);
 
 Secure-Context Memory
 ~~~~~~~~~~~~~~~~~~~~~
@@ -271,7 +303,7 @@ world context of all CPUs.
 
 .. code:: c
 
-	static spmd_spm_core_context_t spm_core_context[PLATFORM_CORE_COUNT];
+	static PER_CPU_DEFINE(spmd_spm_core_context_t, spm_core_context);
 
 Realm-Context Memory
 ~~~~~~~~~~~~~~~~~~~~
@@ -280,7 +312,7 @@ context of all CPUs.
 
 .. code:: c
 
-	rmmd_rmm_context_t rmm_context[PLATFORM_CORE_COUNT];
+	PER_CPU_DEFINE(rmmd_rmm_context_t, rmm_context);
 
 To summarize, the world-specific context structures are synchronized with
 per-CPU data structures, which means that each CPU will have an array of pointers
@@ -328,9 +360,9 @@ more details on the warm boot.
 
 |Context Init WarmBoot|
 
-The primary CPU initializes the Non-Secure context for the secondary CPU while
-restoring re-entry information for the Non-Secure world.
-It initialises via ``cm_init_context_by_index(target_idx, ep )``.
+The primary CPU writes the entrypoint for the secondary CPU. When the secondary
+wakes up it initialises its own context via ``cm_init_my_context( ep )`` using
+the provided entrypoint.
 
 ``psci_warmboot_entrypoint()`` is the warm boot entrypoint procedure.
 During the warm bootup process, secondary CPUs have their secure context
@@ -481,21 +513,82 @@ structure and is intended to manage specific EL3 registers.
 
 	typedef struct per_world_context {
 		uint64_t ctx_cptr_el3;
-		uint64_t ctx_zcr_el3;
 		uint64_t ctx_mpam3_el3;
+	#if (ENABLE_FEAT_IDTE3 && IMAGE_BL31)
+		perworld_idregs_t idregs;
+	#endif
 	} per_world_context_t;
+
+When FEAT_IDTE3 (Trapping ID register accesses to EL3) is enabled,
+the ``per_world_context_t`` structure includes a ``perworld_idregs_t`` member
+that caches architectural ID registers common across all CPUs in a world.
+This cache allows EL3 firmware to provide consistent, virtualized ID register
+values to lower exception levels when traps occur. The cached values stored in
+``idregs`` are returned in place of the actual hardware register values.
+During initialization, the per-world ID register cache is populated by
+``idte3_init_cached_idregs_per_world()``.
 
 These functions facilitate the activation of architectural extensions that possess
 identical values across all cores for the individual Non-secure, Secure, and
 Realm worlds.
 
-*Copyright (c) 2024, Arm Limited and Contributors. All rights reserved.*
+Root-Context (EL3-Execution-Context)
+====================================
+
+EL3/Root Context is the execution environment while the CPU is running at EL3.
+
+Previously, while the CPU is in execution at EL3, the system registers persist
+with the values of the incoming world. This implies that if the CPU is entering
+EL3 from NS world, the EL1 and EL2 system registers which might be modified in
+lower exception levels NS(EL2/EL1) will carry forward those values to EL3.
+Further the EL3 registers also hold on to the values configured for Non-secure
+world, written during the previous ERET from EL3 to NS(EL2/EL1).
+Same policy is followed with respect to other worlds (Secure/Realm) depending on
+the system configuration.
+
+The firmware at EL3 has traditionally operated within the context of the incoming
+world (Secure/Non-Secure/Realm). This becomes problematic in scenarios where the
+EL3/Root world must explicitly use architectural features that depend on system
+registers configured for lower exception levels.
+A good example of this is the PAuth regs. The Root world would need to program
+its own PAuth Keys while executing in EL3 and this needs to be restored in entry
+to EL3 from any world.
+Therefore, Root world should maintain its own distinct settings to access
+features for its own execution at EL3.
+
+Register values which are currently known to be of importance during EL3 execution,
+is referred to as the EL3/Root context.
+This includes ( MDCR_EL3.SDD, SCR_EL3.{EA, SIF}, PMCR_EL0.DP, PSTATE.DIT)
+EL3 Context ensures, CPU executes under fixed EL3 system register settings
+which is not affected by settings of other worlds.
+
+Root Context needs to be setup as early as possible before we try and access/modify
+architectural features at EL3. Its a simple restore operation ``setup_el3_execution_context``
+that overwrites the selected bits listed above. EL3 never changes its mind about
+what those values should be, sets it as required for EL3. Henceforth, a Root
+context save operation is not required.
+
+The figure below illustrates the same with NS-world as a reference while entering
+EL3.
+
+|Root Context Sequence|
+
+.. code:: c
+
+	# EL3/Root_Context routine
+	.macro setup_el3_execution_context
+
+EL3 execution context needs to setup at both boot time (cold and warm boot)
+entrypaths and at all the possible exception handlers routing to EL3 at runtime.
+
+*Copyright (c) 2024-2025, Arm Limited and Contributors. All rights reserved.*
 
 .. |Context Memory Allocation| image:: ../resources/diagrams/context_memory_allocation.png
 .. |CPU Context Memory Configuration| image:: ../resources/diagrams/cpu_data_config_context_memory.png
 .. |CPU Data Structure| image:: ../resources/diagrams/percpu-data-struct.png
 .. |Context Init ColdBoot| image:: ../resources/diagrams/context_init_coldboot.png
 .. |Context Init WarmBoot| image:: ../resources/diagrams/context_init_warmboot.png
+.. |Root Context Sequence| image:: ../resources/diagrams/root_context_sequence.png
 .. _Trustzone for AArch64: https://developer.arm.com/documentation/102418/0101/TrustZone-in-the-processor/Switching-between-Security-states
 .. _Security States with RME: https://developer.arm.com/documentation/den0126/0100/Security-states
 .. _lib/el3_runtime/(aarch32/aarch64): https://git.trustedfirmware.org/TF-A/trusted-firmware-a.git/tree/lib/el3_runtime

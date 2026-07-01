@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2015-2021, Xilinx Inc.
+ * Copyright (c) 2015-2022, Xilinx Inc.
+ * Copyright (c) 2022-2025, Advanced Micro Devices, Inc. All rights reserved.
  * Written by Michal Simek.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -45,10 +46,10 @@
 #define TIMEOUT_COUNT_US	U(0x10624)
 
 struct dcc_console {
-	struct console console;
+	console_t console;
 };
 
-static inline uint32_t __dcc_getstatus(void)
+static inline u_register_t __dcc_getstatus(void)
 {
 	return read_mdccsr_el0();
 }
@@ -77,7 +78,7 @@ static int32_t dcc_status_timeout(uint32_t mask)
 {
 	const unsigned int timeout_count = TIMEOUT_COUNT_US;
 	uint64_t timeout;
-	unsigned int status;
+	u_register_t status;
 
 	timeout = timeout_init_us(timeout_count);
 
@@ -91,9 +92,11 @@ static int32_t dcc_status_timeout(uint32_t mask)
 	return 0;
 }
 
-static int32_t dcc_console_putc(int32_t ch, struct console *console)
+static int32_t dcc_console_putc(int32_t ch, console_t *console)
 {
-	unsigned int status;
+	int32_t status;
+
+	(void)console;
 
 	status = dcc_status_timeout(DCC_STATUS_TX);
 	if (status != 0U) {
@@ -105,9 +108,9 @@ static int32_t dcc_console_putc(int32_t ch, struct console *console)
 }
 
 #if ENABLE_CONSOLE_GETC
-static int32_t dcc_console_getc(struct console *console)
+static int32_t dcc_console_getc(console_t *console)
 {
-	unsigned int status;
+	int32_t status;
 
 	status = dcc_status_timeout(DCC_STATUS_RX);
 	if (status != 0U) {
@@ -124,9 +127,11 @@ static int32_t dcc_console_getc(struct console *console)
  * @console		Console struct
  *
  */
-static void dcc_console_flush(struct console *console)
+static void dcc_console_flush(console_t *console)
 {
-	unsigned int status;
+	int32_t status;
+
+	(void)console;
 
 	status = dcc_status_timeout(DCC_STATUS_TX);
 	if (status != 0U) {
@@ -147,13 +152,14 @@ static struct dcc_console dcc_console = {
 	},
 };
 
-int console_dcc_register(void)
+int console_dcc_register(console_t *console)
 {
-	return console_register(&dcc_console.console);
+	memcpy(console, &dcc_console.console, sizeof(console_t));
+	return console_register(console);
 }
 
-void console_dcc_unregister(void)
+void console_dcc_unregister(console_t *console)
 {
-	dcc_console_flush(&dcc_console.console);
-	(void)console_unregister(&dcc_console.console);
+	dcc_console_flush(console);
+	(void)console_unregister(console);
 }

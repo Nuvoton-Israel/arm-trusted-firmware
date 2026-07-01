@@ -29,6 +29,7 @@ BL31_SOURCES		+=	plat/imx/common/imx8_helpers.S			\
 				plat/imx/imx8m/imx8mq/imx8mq_bl31_setup.c	\
 				plat/imx/imx8m/imx8mq/imx8mq_psci.c		\
 				plat/imx/imx8m/gpc_common.c			\
+				plat/imx/imx8m/imx_hab.c			\
 				plat/imx/imx8m/imx_aipstz.c			\
 				plat/imx/imx8m/imx8m_caam.c			\
 				plat/imx/imx8m/imx8m_ccm.c			\
@@ -43,7 +44,6 @@ BL31_SOURCES		+=	plat/imx/common/imx8_helpers.S			\
 				drivers/delay_timer/delay_timer.c		\
 				drivers/delay_timer/generic_delay_timer.c	\
 				${XLAT_TABLES_LIB_SRCS}				\
-				${IMX_DRAM_SOURCES}				\
 				${IMX_GIC_SOURCES}
 
 ENABLE_PIE		:=	1
@@ -55,6 +55,16 @@ WARMBOOT_ENABLE_DCACHE_EARLY	:=	1
 ERRATA_A53_835769	:=	1
 ERRATA_A53_843419	:=	1
 ERRATA_A53_855873	:=	1
+
+IMX_DRAM_RETENTION	?=	0
+$(eval $(call assert_boolean,IMX_DRAM_RETENTION))
+$(eval $(call add_define,IMX_DRAM_RETENTION))
+
+ifeq (${IMX_DRAM_RETENTION},1)
+BL31_SOURCES		+=	${IMX_DRAM_SOURCES}
+endif
+
+SEPARATE_NOBITS_REGION  :=        1
 
 ifneq (${PRELOADED_BL33_BASE},)
 $(eval $(call add_define_val,PLAT_NS_IMAGE_OFFSET,${PRELOADED_BL33_BASE}))

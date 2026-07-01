@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2025, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -7,13 +7,15 @@
 #ifndef CONTEXT_EL2_H
 #define CONTEXT_EL2_H
 
+#include <lib/extensions/sysreg128.h>
+
 #ifndef __ASSEMBLER__
+
 /*******************************************************************************
  * EL2 Registers:
  * AArch64 EL2 system register context structure for preserving the
  * architectural state during world switches.
  ******************************************************************************/
-#if CTX_INCLUDE_EL2_REGS
 typedef struct el2_common_regs {
 	uint64_t actlr_el2;
 	uint64_t afsr0_el2;
@@ -41,12 +43,12 @@ typedef struct el2_common_regs {
 	uint64_t sp_el2;
 	uint64_t tcr_el2;
 	uint64_t tpidr_el2;
-	uint64_t ttbr0_el2;
 	uint64_t vbar_el2;
 	uint64_t vmpidr_el2;
 	uint64_t vpidr_el2;
 	uint64_t vtcr_el2;
-	uint64_t vttbr_el2;
+	sysreg_t vttbr_el2;
+	sysreg_t ttbr0_el2;
 } el2_common_regs_t;
 
 typedef struct el2_mte2_regs {
@@ -62,13 +64,21 @@ typedef struct el2_fgt_regs {
 	uint64_t hfgwtr_el2;
 } el2_fgt_regs_t;
 
+typedef struct el2_fgt2_regs {
+	uint64_t hdfgrtr2_el2;
+	uint64_t hdfgwtr2_el2;
+	uint64_t hfgitr2_el2;
+	uint64_t hfgrtr2_el2;
+	uint64_t hfgwtr2_el2;
+} el2_fgt2_regs_t;
+
 typedef struct el2_ecv_regs {
 	uint64_t cntpoff_el2;
 } el2_ecv_regs_t;
 
 typedef struct el2_vhe_regs {
 	uint64_t contextidr_el2;
-	uint64_t ttbr1_el2;
+	sysreg_t ttbr1_el2;
 } el2_vhe_regs_t;
 
 typedef struct el2_ras_regs {
@@ -128,6 +138,14 @@ typedef struct el2_mpam_regs {
 	uint64_t mpamvpmv_el2;
 } el2_mpam_regs_t;
 
+typedef struct el2_sctlr2_regs {
+	uint64_t sctlr2_el2;
+} el2_sctlr2_regs_t;
+
+typedef struct el2_brbe_regs {
+	uint64_t brbcr_el2;
+} el2_brbe_regs_t;
+
 typedef struct el2_sysregs {
 
 	el2_common_regs_t common;
@@ -138,6 +156,10 @@ typedef struct el2_sysregs {
 
 #if ENABLE_FEAT_FGT
 	el2_fgt_regs_t fgt;
+#endif
+
+#if ENABLE_FEAT_FGT2
+	el2_fgt2_regs_t fgt2;
 #endif
 
 #if ENABLE_FEAT_ECV
@@ -192,6 +214,14 @@ typedef struct el2_sysregs {
 	el2_mpam_regs_t mpam;
 #endif
 
+#if ENABLE_FEAT_SCTLR2
+	el2_sctlr2_regs_t sctlr2;
+#endif
+
+#if ENABLE_BRBE_FOR_NS
+	el2_brbe_regs_t brbe;
+#endif
+
 } el2_sysregs_t;
 
 /*
@@ -202,6 +232,9 @@ typedef struct el2_sysregs {
 
 #define write_el2_ctx_common(ctx, reg, val)	((((ctx)->common).reg)	\
 							= (uint64_t) (val))
+
+#define write_el2_ctx_common_sysreg128(ctx, reg, val)	((((ctx)->common).reg)	\
+							= (sysreg_t) (val))
 
 #if ENABLE_FEAT_MTE2
 #define read_el2_ctx_mte2(ctx, reg)		(((ctx)->mte2).reg)
@@ -221,6 +254,15 @@ typedef struct el2_sysregs {
 #define write_el2_ctx_fgt(ctx, reg, val)
 #endif /* ENABLE_FEAT_FGT */
 
+#if ENABLE_FEAT_FGT2
+#define read_el2_ctx_fgt2(ctx, reg)		(((ctx)->fgt2).reg)
+#define write_el2_ctx_fgt2(ctx, reg, val)	((((ctx)->fgt2).reg)	\
+							= (uint64_t) (val))
+#else
+#define read_el2_ctx_fgt2(ctx, reg)		ULL(0)
+#define write_el2_ctx_fgt2(ctx, reg, val)
+#endif /* ENABLE_FEAT_FGT */
+
 #if ENABLE_FEAT_ECV
 #define read_el2_ctx_ecv(ctx, reg)		(((ctx)->ecv).reg)
 #define write_el2_ctx_ecv(ctx, reg, val)	((((ctx)->ecv).reg)	\
@@ -234,9 +276,12 @@ typedef struct el2_sysregs {
 #define read_el2_ctx_vhe(ctx, reg)		(((ctx)->vhe).reg)
 #define write_el2_ctx_vhe(ctx, reg, val)	((((ctx)->vhe).reg)	\
 							= (uint64_t) (val))
+#define write_el2_ctx_vhe_sysreg128(ctx, reg, val)	((((ctx)->vhe).reg)	\
+							= (sysreg_t) (val))
 #else
 #define read_el2_ctx_vhe(ctx, reg)		ULL(0)
 #define write_el2_ctx_vhe(ctx, reg, val)
+#define write_el2_ctx_vhe_sysreg128(ctx, reg, val)
 #endif /* ENABLE_FEAT_VHE */
 
 #if ENABLE_FEAT_RAS
@@ -338,7 +383,24 @@ typedef struct el2_sysregs {
 #define write_el2_ctx_mpam(ctx, reg, val)
 #endif /* CTX_INCLUDE_MPAM_REGS */
 
-#endif /* CTX_INCLUDE_EL2_REGS */
+#if ENABLE_FEAT_SCTLR2
+#define read_el2_ctx_sctlr2(ctx, reg)		(((ctx)->sctlr2).reg)
+#define write_el2_ctx_sctlr2(ctx, reg, val)	((((ctx)->sctlr2).reg)	\
+							= (uint64_t) (val))
+#else
+#define read_el2_ctx_sctlr2(ctx, reg)		ULL(0)
+#define write_el2_ctx_sctlr2(ctx, reg, val)
+#endif /* ENABLE_FEAT_SCTLR2 */
+
+#if ENABLE_BRBE_FOR_NS
+#define read_el2_ctx_brbe(ctx, reg)		(((ctx)->brbe).reg)
+#define write_el2_ctx_brbe(ctx, reg, val)	((((ctx)->brbe).reg)	\
+							= (uint64_t) (val))
+#else
+#define read_el2_ctx_brbe(ctx, reg)		ULL(0)
+#define write_el2_ctx_brbe(ctx, reg, val)
+#endif /* ENABLE_BRBE_FOR_NS */
+
 /******************************************************************************/
 
 #endif /* __ASSEMBLER__ */

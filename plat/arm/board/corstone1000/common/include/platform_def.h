@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2021-2025, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -55,42 +55,42 @@
 
 /* Memory related constants */
 
-/* SRAM (CVM) memory layout
+/* Memory mappings of where the BLs in the FIP are copied to
  *
- * <ARM_TRUSTED_SRAM_BASE>
+ * <ARM_TRUSTED_SRAM_BASE> = 0x02000000
  *	partition size: sizeof(meminfo_t) = 16 bytes
  *	content: memory info area used by the next BL
  *
- * <ARM_FW_CONFIG_BASE>
+ * <ARM_FW_CONFIG_BASE> = 0x02000010
  *	partition size: 4080 bytes
  *
- * <ARM_BL2_MEM_DESC_BASE>
+ * <ARM_BL2_MEM_DESC_BASE> = 0x02001000
  *	partition size: 4 KB
  *	content: Area where BL2 copies the images descriptors
  *
- * <ARM_BL_RAM_BASE> = <BL32_BASE>
- *	partition size: 688 KB
+ * <ARM_BL_RAM_BASE> = <BL32_BASE> = 0x02002000
+ *	partition size: 3752 KB
  *	content: BL32 (optee-os)
  *
- * <CORSTONE1000_TOS_FW_CONFIG_BASE> = 0x20ae000
+ * <CORSTONE1000_TOS_FW_CONFIG_BASE> = 0x023AC000
  *	partition size: 8 KB
  *	content: BL32 config (TOS_FW_CONFIG)
  *
- * <BL31_BASE>
+ * <BL31_BASE> = 0x023AE000
  *	partition size: 140 KB
  *	content: BL31
  *
- * <BL2_SIGNATURE_BASE>
+ * <BL2_SIGNATURE_BASE> = 0x023D1000
  *	partition size: 4 KB
  *	content: MCUBOOT data needed to verify TF-A BL2
  *
- * <BL2_BASE>
+ * <BL2_BASE> = 0x023D2000
  *	partition size: 176 KB
  *	content: BL2
  *
- * <ARM_NS_SHARED_RAM_BASE> = <ARM_TRUSTED_SRAM_BASE> + 1 MB
- *	partition size: 512 KB
- *	content: BL33 (u-boot)
+ * <BL33_BASE> = 0x80000000
+ *	partition size: 12 MB
+ *	content: BL33 (U-Boot)
  */
 
 /* DDR memory */
@@ -115,11 +115,8 @@
 /* The remaining Trusted SRAM is used to load the BL images */
 #define TOTAL_SRAM_SIZE		(SZ_4M)  /* 4 MB */
 
-/* Last 512KB of CVM is allocated for shared RAM as an example openAMP */
-#define ARM_NS_SHARED_RAM_SIZE	(512 * SZ_1K)
 
 #define PLAT_ARM_TRUSTED_SRAM_SIZE	(TOTAL_SRAM_SIZE - \
-					 ARM_NS_SHARED_RAM_SIZE - \
 					 ARM_SHARED_RAM_SIZE)
 
 #define PLAT_ARM_MAX_BL2_SIZE	(180 * SZ_1K)  /* 180 KB */
@@ -158,11 +155,6 @@
 
 /* NS memory */
 
-/* The last 512KB of the SRAM is allocated as shared memory */
-#define ARM_NS_SHARED_RAM_BASE	(ARM_TRUSTED_SRAM_BASE + TOTAL_SRAM_SIZE - \
-				 (PLAT_ARM_MAX_BL31_SIZE + \
-				  PLAT_ARM_MAX_BL32_SIZE))
-
 #define BL33_BASE		ARM_DRAM1_BASE
 #define PLAT_ARM_MAX_BL33_SIZE	(12 * SZ_1M)  /* 12 MB*/
 #define BL33_LIMIT		(ARM_DRAM1_BASE + PLAT_ARM_MAX_BL33_SIZE)
@@ -176,7 +168,6 @@
 #define PLAT_ARM_FIP_MAX_SIZE		UL(0x1ff000)  /* 1.996 MB */
 #define PLAT_ARM_FLASH_IMAGE_BASE	UL(0x08000000)
 #define PLAT_ARM_FLASH_IMAGE_MAX_SIZE	PLAT_ARM_FIP_MAX_SIZE
-#define PLAT_ARM_FIP_OFFSET_IN_GPT	(0x86000)
 
 /* FIP Information */
 #define FIP_SIGNATURE_AREA_SIZE         (0x1000)      /* 4 KB */
@@ -262,9 +253,22 @@
 #define ARM_LOCAL_STATE_OFF	U(2)
 
 #define PLAT_ARM_TRUSTED_MAILBOX_BASE	ARM_TRUSTED_SRAM_BASE
+
+#if defined(CORSTONE1000_FVP_MULTICORE)
+/* The secondary core entrypoint address points to bl31_warm_entrypoint
+ * and the address size is 8 bytes */
+#define CORSTONE1000_SECONDARY_CORE_ENTRYPOINT_ADDRESS_SIZE    UL(0x8)
+
+#define CORSTONE1000_SECONDARY_CORE_HOLD_BASE	(PLAT_ARM_TRUSTED_MAILBOX_BASE + \
+						CORSTONE1000_SECONDARY_CORE_ENTRYPOINT_ADDRESS_SIZE)
+#define CORSTONE1000_SECONDARY_CORE_STATE_WAIT	ULL(0)
+#define CORSTONE1000_SECONDARY_CORE_STATE_GO	ULL(1)
+#define CORSTONE1000_SECONDARY_CORE_HOLD_SHIFT	ULL(3)
+#endif
+
 #define PLAT_ARM_NSTIMER_FRAME_ID	U(1)
 
-#define PLAT_ARM_NS_IMAGE_BASE		(ARM_NS_SHARED_RAM_BASE)
+#define PLAT_ARM_NS_IMAGE_BASE		(BL33_BASE)
 
 #define PLAT_PHY_ADDR_SPACE_SIZE	(1ULL << 32)
 #define PLAT_VIRT_ADDR_SPACE_SIZE	(1ULL << 32)
@@ -292,11 +296,6 @@
 				ARM_SHARED_RAM_BASE, \
 				ARM_SHARED_RAM_SIZE, \
 				MT_MEMORY | MT_RW | MT_SECURE)
-
-#define ARM_MAP_NS_SHARED_RAM	MAP_REGION_FLAT( \
-				ARM_NS_SHARED_RAM_BASE, \
-				ARM_NS_SHARED_RAM_SIZE, \
-				MT_MEMORY | MT_RW | MT_NS)
 
 #define ARM_MAP_NS_DRAM1	MAP_REGION_FLAT( \
 				ARM_NS_DRAM1_BASE, \

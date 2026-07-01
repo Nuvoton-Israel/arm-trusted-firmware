@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018, Xilinx, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -29,7 +30,7 @@
  ********************************************************************/
 #define IPI_SECURE_MASK  (0x1U)
 #define IPI_IS_SECURE(I) ((ipi_table[(I)].secure_only & \
-			   IPI_SECURE_MASK) ? 1 : 0)
+			   IPI_SECURE_MASK) ? true : false)
 
 /*********************************************************************
  * Struct definitions
@@ -37,9 +38,9 @@
 
 /* structure to maintain IPI configuration information */
 struct ipi_config {
-	unsigned int ipi_bit_mask;
-	unsigned int ipi_reg_base;
-	unsigned char secure_only;
+	uint32_t ipi_bit_mask;
+	uint32_t ipi_reg_base;
+	uint8_t secure_only;
 };
 
 /*********************************************************************
@@ -51,7 +52,7 @@ void ipi_config_table_init(const struct ipi_config *ipi_config_table,
 			   uint32_t total_ipi);
 
 /* Validate IPI mailbox access */
-int ipi_mb_validate(uint32_t local, uint32_t remote, unsigned int is_secure);
+int32_t ipi_mb_validate(uint32_t local, uint32_t remote, uint32_t is_secure);
 
 /* Open the IPI mailbox */
 void ipi_mb_open(uint32_t local, uint32_t remote);
@@ -60,7 +61,7 @@ void ipi_mb_open(uint32_t local, uint32_t remote);
 void ipi_mb_release(uint32_t local, uint32_t remote);
 
 /* Enquire IPI mailbox status */
-int ipi_mb_enquire_status(uint32_t local, uint32_t remote);
+uint32_t ipi_mb_enquire_status(uint32_t local, uint32_t remote);
 
 /* Trigger notification on the IPI mailbox */
 void ipi_mb_notify(uint32_t local, uint32_t remote, uint32_t is_blocking);

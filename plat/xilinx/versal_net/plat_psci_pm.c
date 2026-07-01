@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2022, Xilinx, Inc. All rights reserved.
- * Copyright (c) 2022-2024, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -8,6 +8,7 @@
 #include <assert.h>
 
 #include <common/debug.h>
+#include <common/ep_info.h>
 #include <lib/mmio.h>
 #include <lib/psci/psci.h>
 #include <plat/arm/common/plat_arm.h>
@@ -27,28 +28,32 @@ static uintptr_t versal_net_sec_entry;
 
 static int32_t versal_net_pwr_domain_on(u_register_t mpidr)
 {
-	uint32_t cpu_id = plat_core_pos_by_mpidr(mpidr);
+	int32_t cpu_id = plat_core_pos_by_mpidr(mpidr);
 	const struct pm_proc *proc;
+	int32_t ret = PSCI_E_INTERN_FAIL;
 
 	VERBOSE("%s: mpidr: 0x%lx, cpuid: %x\n",
 		__func__, mpidr, cpu_id);
 
 	if (cpu_id == -1) {
-		return PSCI_E_INTERN_FAIL;
+		goto exit_label;
 	}
 
 	proc = pm_get_proc(cpu_id);
 	if (proc == NULL) {
-		return PSCI_E_INTERN_FAIL;
+		goto exit_label;
 	}
 
-	pm_req_wakeup(proc->node_id, (versal_net_sec_entry & 0xFFFFFFFFU) | 0x1U,
+	(void)pm_req_wakeup(proc->node_id, (versal_net_sec_entry & 0xFFFFFFFFU) | 0x1U,
 		      versal_net_sec_entry >> 32, 0, 0);
 
 	/* Clear power down request */
 	pm_client_wakeup(proc);
 
-	return PSCI_E_SUCCESS;
+	ret = PSCI_E_SUCCESS;
+
+exit_label:
+	return ret;
 }
 
 /**
@@ -59,21 +64,18 @@ static int32_t versal_net_pwr_domain_on(u_register_t mpidr)
  */
 static void versal_net_pwr_domain_off(const psci_power_state_t *target_state)
 {
-	uint32_t ret, fw_api_version, version[PAYLOAD_ARG_CNT] = {0U};
+	uint32_t ret, fw_api_version, version_type[RET_PAYLOAD_ARG_CNT] = {0U};
 	uint32_t cpu_id = plat_my_core_pos();
 	const struct pm_proc *proc = pm_get_proc(cpu_id);
 
 	if (proc == NULL) {
-		return;
+		goto exit_label;
 	}
 
 	for (size_t i = 0; i <= PLAT_MAX_PWR_LVL; i++) {
 		VERBOSE("%s: target_state->pwr_domain_state[%lu]=%x\n",
 			__func__, i, target_state->pwr_domain_state[i]);
 	}
-
-	/* Prevent interrupts from spuriously waking up this cpu */
-	plat_arm_gic_cpuif_disable();
 
 	/*
 	 * Send request to PMC to power down the appropriate APU CPU
@@ -83,26 +85,43 @@ static void versal_net_pwr_domain_off(const psci_power_state_t *target_state)
 	 * invoking CPU_on function, during which resume address will
 	 * be set.
 	 */
-	ret = pm_feature_check((uint32_t)PM_SELF_SUSPEND, &version[0], SECURE_FLAG);
-	if (ret == PM_RET_SUCCESS) {
-		fw_api_version = version[0] & 0xFFFFU;
+	ret = pm_feature_check((uint32_t)PM_SELF_SUSPEND, &version_type[0], NON_SECURE);
+	if (ret == (uint32_t)PM_RET_SUCCESS) {
+		fw_api_version = version_type[0] & 0xFFFFU;
 		if (fw_api_version >= 3U) {
 			(void)pm_self_suspend(proc->node_id, MAX_LATENCY, PM_STATE_CPU_OFF, 0,
-					      SECURE_FLAG);
+					      NON_SECURE);
 		} else {
 			(void)pm_self_suspend(proc->node_id, MAX_LATENCY, PM_STATE_CPU_IDLE, 0,
-					      SECURE_FLAG);
+					      NON_SECURE);
 		}
 	}
+
+exit_label:
+	return;
+}
+
+static int32_t versal_net_validate_ns_entrypoint(uint64_t ns_entrypoint)
+{
+	int32_t ret = PSCI_E_SUCCESS;
+
+	if (((ns_entrypoint >= PLAT_DDR_LOWMEM_MAX) && (ns_entrypoint <= PLAT_DDR_HIGHMEM_MAX)) ||
+		((ns_entrypoint >= BL31_BASE) && (ns_entrypoint <= BL31_LIMIT))) {
+		ret = PSCI_E_INVALID_ADDRESS;
+	}
+
+	return ret;
 }
 
 /**
- * versal_net_system_reset() - This function sends the reset request to firmware
- *                             for the system to reset. This function does not
- *                             return.
+ * versal_net_system_reset_scope() - Sends the reset request to firmware for
+ * the system to reset.
+ * @scope : scope of reset which could be SYSTEM/SUBSYSTEM/PS-ONLY
  *
+ * Return:
+ *     Does not return if system resets, none if there is a failure.
  */
-static void __dead2 versal_net_system_reset(void)
+static void __dead2 versal_net_system_reset_scope(uint32_t scope)
 {
 	uint32_t ret, timeout = 10000U;
 
@@ -112,9 +131,9 @@ static void __dead2 versal_net_system_reset(void)
 	 * Send the system reset request to the firmware if power down request
 	 * is not received from firmware.
 	 */
-	if (!pwrdwn_req_received) {
+	if (!pm_pwrdwn_req_status()) {
 		(void)pm_system_shutdown(XPM_SHUTDOWN_TYPE_RESET,
-					 pm_get_shutdown_scope(), SECURE_FLAG);
+					 scope, NON_SECURE);
 
 		/*
 		 * Wait for system shutdown request completed and idle callback
@@ -130,9 +149,57 @@ static void __dead2 versal_net_system_reset(void)
 
 	(void)psci_cpu_off();
 
-	while (1) {
+	while (true) {
 		wfi();
 	}
+}
+
+/**
+ * versal_net_system_reset() - This function sends the reset request to firmware
+ * for the system to reset in response to SYSTEM_RESET call
+ *
+ * Return:
+ *     Does not return if system resets, none if there is a failure.
+ */
+static void __dead2 versal_net_system_reset(void)
+{
+	/*
+	 * Any platform-specific actions for handling a cold reset
+	 * should be performed here before invoking
+	 * versal_net_system_reset_scope.
+	 */
+	versal_net_system_reset_scope(XPM_SHUTDOWN_SUBTYPE_RST_SUBSYSTEM);
+}
+
+/**
+ * versal_net_system_reset2() - Handles warm / vendor-specific system reset
+ * in response to SYSTEM_RESET2 call.
+ * @is_vendor: Flag indicating if this is a vendor-specific reset
+ * @reset_type: Type of reset requested
+ * @cookie: Additional reset data
+ *
+ * This function initiates a controlled system reset by requesting it
+ * through the PM firmware.
+ *
+ * Return:
+ *	Does not return if system resets, PSCI_E_INTERN_FAIL
+ *	if there is a failure.
+ */
+static int versal_net_system_reset2(int is_vendor, int reset_type, u_register_t cookie)
+{
+	if (is_vendor == 0 && reset_type == PSCI_RESET2_SYSTEM_WARM_RESET) {
+		/*
+		 * Any platform-specific actions for handling a warm reset
+		 * should be performed here before invoking
+		 * versal_net_system_reset_scope.
+		 */
+		versal_net_system_reset_scope(XPM_SHUTDOWN_SUBTYPE_RST_SUBSYSTEM);
+	} else {
+		/* Vendor specific reset */
+		versal_net_system_reset_scope(pm_get_shutdown_scope());
+	}
+
+	return PSCI_E_INTERN_FAIL;
 }
 
 /**
@@ -148,7 +215,7 @@ static void versal_net_pwr_domain_suspend(const psci_power_state_t *target_state
 	const struct pm_proc *proc = pm_get_proc(cpu_id);
 
 	if (proc == NULL) {
-		return;
+		goto exit_label;
 	}
 
 	for (size_t i = 0; i <= PLAT_MAX_PWR_LVL; i++) {
@@ -156,31 +223,26 @@ static void versal_net_pwr_domain_suspend(const psci_power_state_t *target_state
 			__func__, i, target_state->pwr_domain_state[i]);
 	}
 
-	plat_arm_gic_cpuif_disable();
-
 	if (target_state->pwr_domain_state[1] > PLAT_MAX_RET_STATE) {
-		plat_arm_gic_save();
+		gic_save();
 	}
 
-	state = target_state->pwr_domain_state[1] > PLAT_MAX_RET_STATE ?
+	state = (target_state->pwr_domain_state[1] > PLAT_MAX_RET_STATE) ?
 		PM_STATE_SUSPEND_TO_RAM : PM_STATE_CPU_IDLE;
 
 	/* Send request to PMC to suspend this core */
-	pm_self_suspend(proc->node_id, MAX_LATENCY, state, versal_net_sec_entry,
-			SECURE_FLAG);
+	(void)pm_self_suspend(proc->node_id, MAX_LATENCY, state, versal_net_sec_entry,
+			      NON_SECURE);
 
 	/* TODO: disable coherency */
+
+exit_label:
+	return;
 }
 
 static void versal_net_pwr_domain_on_finish(const psci_power_state_t *target_state)
 {
 	(void)target_state;
-
-	/* Enable the gic cpu interface */
-	plat_arm_gic_pcpu_init();
-
-	/* Program the gic per-cpu distributor or re-distributor interface */
-	plat_arm_gic_cpuif_enable();
 }
 
 /**
@@ -195,12 +257,13 @@ static void versal_net_pwr_domain_suspend_finish(const psci_power_state_t *targe
 	const struct pm_proc *proc = pm_get_proc(cpu_id);
 
 	if (proc == NULL) {
-		return;
+		goto exit_label;
 	}
 
-	for (size_t i = 0; i <= PLAT_MAX_PWR_LVL; i++)
+	for (size_t i = 0; i <= PLAT_MAX_PWR_LVL; i++) {
 		VERBOSE("%s: target_state->pwr_domain_state[%lu]=%x\n",
 			__func__, i, target_state->pwr_domain_state[i]);
+	}
 
 	/* Clear the APU power control register for this cpu */
 	pm_client_wakeup(proc);
@@ -209,10 +272,11 @@ static void versal_net_pwr_domain_suspend_finish(const psci_power_state_t *targe
 
 	/* APU was turned off, so restore GIC context */
 	if (target_state->pwr_domain_state[1] > PLAT_MAX_RET_STATE) {
-		plat_arm_gic_resume();
+		gic_resume();
 	}
 
-	plat_arm_gic_cpuif_enable();
+exit_label:
+	return;
 }
 
 /**
@@ -223,10 +287,10 @@ static void versal_net_pwr_domain_suspend_finish(const psci_power_state_t *targe
 static void __dead2 versal_net_system_off(void)
 {
 	/* Send the power down request to the PMC */
-	pm_system_shutdown(XPM_SHUTDOWN_TYPE_SHUTDOWN,
-			  pm_get_shutdown_scope(), SECURE_FLAG);
+	(void)pm_system_shutdown(XPM_SHUTDOWN_TYPE_SHUTDOWN,
+				 pm_get_shutdown_scope(), NON_SECURE);
 
-	while (1) {
+	while (true) {
 		wfi();
 	}
 }
@@ -243,11 +307,13 @@ static void __dead2 versal_net_system_off(void)
 static int32_t versal_net_validate_power_state(unsigned int power_state,
 					       psci_power_state_t *req_state)
 {
+	int32_t ret = PSCI_E_INVALID_PARAMS;
+
 	VERBOSE("%s: power_state: 0x%x\n", __func__, power_state);
 
-	int32_t pstate = psci_get_pstate_type(power_state);
+	uint32_t pstate = psci_get_pstate_type(power_state);
 
-	assert(req_state);
+	assert(req_state != NULL);
 
 	/* Sanity check the requested state */
 	if (pstate == PSTATE_TYPE_STANDBY) {
@@ -257,11 +323,11 @@ static int32_t versal_net_validate_power_state(unsigned int power_state,
 	}
 
 	/* We expect the 'state id' to be zero */
-	if (psci_get_pstate_id(power_state)) {
-		return PSCI_E_INVALID_PARAMS;
+	if (psci_get_pstate_id(power_state) == 0U) {
+		ret = PSCI_E_SUCCESS;
 	}
 
-	return PSCI_E_SUCCESS;
+	return ret;
 }
 
 /**
@@ -274,8 +340,9 @@ static void versal_net_get_sys_suspend_power_state(psci_power_state_t *req_state
 {
 	uint64_t i;
 
-	for (i = MPIDR_AFFLVL0; i <= PLAT_MAX_PWR_LVL; i++)
+	for (i = MPIDR_AFFLVL0; i <= PLAT_MAX_PWR_LVL; i++) {
 		req_state->pwr_domain_state[i] = PLAT_MAX_OFF_STATE;
+	}
 }
 
 static const struct plat_psci_ops versal_net_nopmc_psci_ops = {
@@ -286,6 +353,8 @@ static const struct plat_psci_ops versal_net_nopmc_psci_ops = {
 	.pwr_domain_suspend_finish      = versal_net_pwr_domain_suspend_finish,
 	.system_off                     = versal_net_system_off,
 	.system_reset                   = versal_net_system_reset,
+	.system_reset2                  = versal_net_system_reset2,
+	.validate_ns_entrypoint		= versal_net_validate_ns_entrypoint,
 	.validate_power_state           = versal_net_validate_power_state,
 	.get_sys_suspend_power_state    = versal_net_get_sys_suspend_power_state,
 };

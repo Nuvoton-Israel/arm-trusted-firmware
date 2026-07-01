@@ -24,11 +24,6 @@
 #   NON_TRUSTED_WORLD_KEY
 #
 
-# Copy the tbbr.mk from PLAT_TOOL_PATH/cert_create_helper
-# to the ${PLAT_DIR}. So that cert_create is enabled
-# to create certificates for DDR
-$(shell cp ${PLAT_TOOL_PATH}/cert_create_helper/cert_create_tbbr.mk ${PLAT_DIR})
-
 # Certificate generation tool default parameters
 DDR_FW_CERT		:=	${BUILD_PLAT}/ddr_fw_key_cert.crt
 
@@ -38,8 +33,6 @@ NTFW_NVCTR_VAL		?=	0
 
 # Pass the non-volatile counters to the cert_create tool
 $(eval $(call CERT_ADD_CMD_OPT,${TFW_NVCTR_VAL},--tfw-nvctr,DDR_))
-
-$(shell mkdir -p '${BUILD_PLAT}')
 
 ifeq (${DDR_KEY},)
 DDR_KEY=${BUILD_PLAT}/ddr.pem

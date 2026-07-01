@@ -1,12 +1,12 @@
 #
-# Copyright (c) 2021-2023, Arm Limited and Contributors. All rights reserved.
+# Copyright (c) 2021-2025 Arm Limited and Contributors. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
 # Making sure the corstone1000 platform type is specified
 ifeq ($(filter ${TARGET_PLATFORM}, fpga fvp),)
-	$(error TARGET_PLATFORM must be fpga or fvp)
+        $(error TARGET_PLATFORM must be fpga or fvp)
 endif
 
 CORSTONE1000_CPU_LIBS	+=lib/cpus/aarch64/cortex_a35.S
@@ -36,13 +36,14 @@ ifeq (${NEED_BL32},yes)
 $(eval $(call add_define,CORSTONE1000_WITH_BL32))
 endif
 
-# Include GICv2 driver files
-include drivers/arm/gic/v2/gicv2.mk
+ENABLE_MULTICORE       :=      0
+ifneq ($(filter ${TARGET_PLATFORM}, fvp),)
+ifeq (${ENABLE_MULTICORE},1)
+$(eval $(call add_define,CORSTONE1000_FVP_MULTICORE))
+endif
+endif
 
-CORSTONE1000_GIC_SOURCES	:=	${GICV2_SOURCES}			\
-				plat/common/plat_gicv2.c		\
-				plat/arm/common/arm_gicv2.c
-
+USE_GIC_DRIVER			:=	2
 
 BL2_SOURCES		+=	plat/arm/board/corstone1000/common/corstone1000_security.c		\
 				plat/arm/board/corstone1000/common/corstone1000_err.c		\
@@ -63,8 +64,7 @@ BL31_SOURCES	+=	drivers/cfi/v2m/v2m_flash.c				\
 			plat/arm/board/corstone1000/common/corstone1000_plat.c		\
 			plat/arm/board/corstone1000/common/corstone1000_pm.c		\
 			plat/arm/board/corstone1000/common/corstone1000_bl31_setup.c	\
-			${CORSTONE1000_CPU_LIBS}					\
-			${CORSTONE1000_GIC_SOURCES}
+			${CORSTONE1000_CPU_LIBS}
 
 ifneq (${ENABLE_STACK_PROTECTOR},0)
 	ifneq (${ENABLE_STACK_PROTECTOR},none)

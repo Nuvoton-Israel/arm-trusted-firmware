@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2013-2024, Arm Limited and Contributors. All rights reserved.
- * Copyright (c) 2023, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2013-2025, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2023-2024, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -13,7 +13,9 @@
 #include <common/debug.h>
 #include <common/fdt_fixup.h>
 #include <common/fdt_wrappers.h>
+#include <drivers/generic_delay_timer.h>
 #include <lib/mmio.h>
+#include <lib/xlat_tables/xlat_tables_v2.h>
 #include <libfdt.h>
 #include <plat/arm/common/plat_arm.h>
 #include <plat/common/platform.h>
@@ -56,10 +58,30 @@ struct entry_point_info *bl31_plat_get_next_image_ep_info(uint32_t type)
 static inline void bl31_set_default_config(void)
 {
 	bl32_image_ep_info.pc = BL32_BASE;
-	bl32_image_ep_info.spsr = arm_get_spsr_for_bl32_entry();
+	bl32_image_ep_info.spsr = arm_get_spsr(BL32_IMAGE_ID);
 	bl33_image_ep_info.pc = plat_get_ns_image_entrypoint();
-	bl33_image_ep_info.spsr = SPSR_64(MODE_EL2, MODE_SP_ELX,
+	bl33_image_ep_info.spsr = (uint32_t)SPSR_64(MODE_EL2, MODE_SP_ELX,
 					  DISABLE_ALL_EXCEPTIONS);
+}
+
+static inline uint64_t read_cntvct_el0(void)
+{
+	uint64_t val;
+
+	asm volatile("mrs %0, cntvct_el0" : "=r" (val));
+	return val;
+}
+
+static inline void reset_cntvct_el0_to_zero(void)
+{
+	asm volatile(
+		"mrs x0, cntpct_el0\n"   /* Read physical counter into x0 */
+		"neg x0, x0\n"           /* Negate it: x0 = -x0 */
+		"msr cntvoff_el2, x0\n"  /* Write offset to virtual counter */
+		:
+		:
+		: "x0", "memory"
+	);
 }
 
 /*
@@ -71,12 +93,29 @@ static inline void bl31_set_default_config(void)
 void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 				u_register_t arg2, u_register_t arg3)
 {
+	(void)arg0;
+	(void)arg1;
+	(void)arg2;
+	(void)arg3;
 	uint64_t tfa_handoff_addr;
+	uint64_t counter_freq;
+
+	/* Configure counter frequency */
+	counter_freq = read_cntfrq_el0();
+	if (counter_freq == ZYNQMP_DEFAULT_COUNTER_FREQ) {
+		write_cntfrq_el0(plat_get_syscnt_freq2());
+	}
+
+	generic_delay_timer_init();
 
 	setup_console();
 
 	/* Initialize the platform config for future decision making */
 	zynqmp_config_setup();
+
+	INFO("Counter TICK 0x%lx\n", read_cntvct_el0());
+	reset_cntvct_el0_to_zero();
+	INFO("Counter TICK after reset 0x%lx\n", read_cntvct_el0());
 
 	/*
 	 * Do initial security configuration to allow DRAM/device access. On
@@ -91,7 +130,7 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 	SET_PARAM_HEAD(&bl33_image_ep_info, PARAM_EP, VERSION_1, 0);
 	SET_SECURITY_STATE(bl33_image_ep_info.h.attr, NON_SECURE);
 
-	tfa_handoff_addr = mmio_read_32(PMU_GLOBAL_GEN_STORAGE6);
+	tfa_handoff_addr = (uint64_t)mmio_read_32(PMU_GLOBAL_GEN_STORAGE6);
 
 	if (zynqmp_get_bootmode() == ZYNQMP_BOOTMODE_JTAG) {
 		bl31_set_default_config();
@@ -104,10 +143,10 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 			panic();
 		}
 	}
-	if (bl32_image_ep_info.pc != 0) {
+	if (bl32_image_ep_info.pc != 0U) {
 		NOTICE("BL31: Secure code at 0x%lx\n", bl32_image_ep_info.pc);
 	}
-	if (bl33_image_ep_info.pc != 0) {
+	if (bl33_image_ep_info.pc != 0U) {
 		NOTICE("BL31: Non secure code at 0x%lx\n", bl33_image_ep_info.pc);
 	}
 
@@ -220,5 +259,5 @@ void bl31_plat_arch_setup(void)
 	custom_mmap_add();
 
 	setup_page_tables(bl_regions, plat_get_mmap());
-	enable_mmu_el3(0);
+	enable_mmu(0);
 }

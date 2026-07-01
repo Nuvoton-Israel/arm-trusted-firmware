@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019, Xilinx, Inc. All rights reserved.
- * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -23,9 +23,6 @@
 #define NODE_TYPE_MASK_BITS     GENMASK_32(5, 0)
 #define NODE_INDEX_MASK_BITS    GENMASK_32(13, 0)
 #define NODE_CLASS_MASK         (NODE_CLASS_MASK_BITS << NODE_CLASS_SHIFT)
-#define NODE_SUBCLASS_MASK      (NODE_SUBCLASS_MASK_BITS << NODE_SUBCLASS_SHIFT)
-#define NODE_TYPE_MASK          (NODE_TYPE_MASK_BITS << NODE_TYPE_SHIFT)
-#define NODE_INDEX_MASK         (NODE_INDEX_MASK_BITS << NODE_INDEX_SHIFT)
 
 #define NODEID(CLASS, SUBCLASS, TYPE, INDEX)	\
 	     ((((CLASS) & NODE_CLASS_MASK_BITS) << NODE_CLASS_SHIFT) | \
@@ -33,11 +30,7 @@
 	     (((TYPE) & NODE_TYPE_MASK_BITS) << NODE_TYPE_SHIFT) | \
 	     (((INDEX) & NODE_INDEX_MASK_BITS) << NODE_INDEX_SHIFT))
 
-#define NODECLASS(ID)		(((ID) & NODE_CLASS_MASK) >> NODE_CLASS_SHIFT)
-#define NODESUBCLASS(ID)	(((ID) & NODE_SUBCLASS_MASK) >> \
-				NODE_SUBCLASS_SHIFT)
-#define NODETYPE(ID)		(((ID) & NODE_TYPE_MASK) >> NODE_TYPE_SHIFT)
-#define NODEINDEX(ID)		(((ID) & NODE_INDEX_MASK) >> NODE_INDEX_SHIFT)
+#define NODECLASS(ID)           (((ID) & NODE_CLASS_MASK) >> NODE_CLASS_SHIFT)
 
 /*********************************************************************
  * Enum definitions
@@ -132,6 +125,18 @@ enum pm_device_node_idx {
 	XPM_NODEIDX_DEV_TTC_2 = 0x26,
 	XPM_NODEIDX_DEV_TTC_3 = 0x27,
 	XPM_NODEIDX_DEV_SWDT_LPD = 0x28,
+	XPM_NODEIDX_DEV_I2C_2 = 0x117,
+	XPM_NODEIDX_DEV_I2C_3 = 0x118,
+	XPM_NODEIDX_DEV_I2C_4 = 0x119,
+	XPM_NODEIDX_DEV_I2C_5 = 0x11A,
+	XPM_NODEIDX_DEV_I2C_6 = 0x11B,
+	XPM_NODEIDX_DEV_I2C_7 = 0x11C,
+	XPM_NODEIDX_DEV_CAN_FD_2 = 0x11D,
+	XPM_NODEIDX_DEV_CAN_FD_3 = 0x11E,
+	XPM_NODEIDX_DEV_TTC_4 = 0x11F,
+	XPM_NODEIDX_DEV_TTC_5 = 0x120,
+	XPM_NODEIDX_DEV_TTC_6 = 0x121,
+	XPM_NODEIDX_DEV_TTC_7 = 0x122,
 
 	/* FPD Peripheral devices */
 	XPM_NODEIDX_DEV_SWDT_FPD = 0x29,
@@ -187,6 +192,9 @@ enum pm_device_node_idx {
 	XPM_NODEIDX_DEV_GT_9 = 0x52,
 	XPM_NODEIDX_DEV_GT_10 = 0x53,
 
+	/* MMI devices */
+	XPM_NODEIDX_DEV_MMI_GEM = 0x13A,
+
 #if defined(PLAT_versal_net)
 	XPM_NODEIDX_DEV_ACPU_0_0 = 0xAF,
 	XPM_NODEIDX_DEV_ACPU_0_1 = 0xB0,
@@ -237,6 +245,11 @@ enum pm_device_node_idx {
 	XPM_NODEIDX_DEV_FPD_SWDT_2 = 0xDD,
 	XPM_NODEIDX_DEV_FPD_SWDT_3 = 0xDE,
 #endif
+
+#if defined(PLAT_versal2)
+	XPM_NODEIDX_DEV_USB_1 = 0xD7,
+#endif
+
 	XPM_NODEIDX_DEV_MAX,
 };
 

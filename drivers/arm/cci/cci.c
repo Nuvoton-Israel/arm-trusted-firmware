@@ -31,21 +31,22 @@ static uintptr_t cci_base;
 static const int *cci_slave_if_map;
 
 #if ENABLE_ASSERTIONS
-static unsigned int max_master_id;
+static size_t max_master_id;
 static int cci_num_slave_ports;
 
 static bool validate_cci_map(const int *map)
 {
 	unsigned int valid_cci_map = 0U;
 	int slave_if_id;
-	unsigned int i;
+	size_t i;
 
 	/* Validate the map */
 	for (i = 0U; i <= max_master_id; i++) {
 		slave_if_id = map[i];
 
-		if (slave_if_id < 0)
+		if (slave_if_id < 0) {
 			continue;
+		}
 
 		if (slave_if_id >= cci_num_slave_ports) {
 			ERROR("Slave interface ID is invalid\n");
@@ -109,7 +110,7 @@ static int get_slave_ports(unsigned int part_num)
 #endif /* ENABLE_ASSERTIONS */
 
 void __init cci_init(uintptr_t base, const int *map,
-				unsigned int num_cci_masters)
+				size_t num_cci_masters)
 {
 	assert(map != NULL);
 	assert(base != 0U);
@@ -130,7 +131,7 @@ void __init cci_init(uintptr_t base, const int *map,
 	assert(validate_cci_map(map));
 }
 
-void cci_enable_snoop_dvm_reqs(unsigned int master_id)
+void cci_enable_snoop_dvm_reqs(size_t master_id)
 {
 	int slave_if_id = cci_slave_if_map[master_id];
 
@@ -143,7 +144,7 @@ void cci_enable_snoop_dvm_reqs(unsigned int master_id)
 	 * rest of bits are write ignore
 	 */
 	mmio_write_32(cci_base +
-		      SLAVE_IFACE_OFFSET(slave_if_id) + SNOOP_CTRL_REG,
+		      SLAVE_IFACE_OFFSET((u_register_t)slave_if_id) + SNOOP_CTRL_REG,
 		      DVM_EN_BIT | SNOOP_EN_BIT);
 
 	/*
@@ -153,11 +154,12 @@ void cci_enable_snoop_dvm_reqs(unsigned int master_id)
 	dsbish();
 
 	/* Wait for the dust to settle down */
-	while ((mmio_read_32(cci_base + STATUS_REG) & CHANGE_PENDING_BIT) != 0U)
+	while ((mmio_read_32(cci_base + STATUS_REG) & CHANGE_PENDING_BIT) != 0U) {
 		;
+	}
 }
 
-void cci_disable_snoop_dvm_reqs(unsigned int master_id)
+void cci_disable_snoop_dvm_reqs(size_t master_id)
 {
 	int slave_if_id = cci_slave_if_map[master_id];
 
@@ -170,7 +172,7 @@ void cci_disable_snoop_dvm_reqs(unsigned int master_id)
 	 * rest of bits are write ignore.
 	 */
 	mmio_write_32(cci_base +
-		      SLAVE_IFACE_OFFSET(slave_if_id) + SNOOP_CTRL_REG,
+		      SLAVE_IFACE_OFFSET((u_register_t)slave_if_id) + SNOOP_CTRL_REG,
 		      ~(DVM_EN_BIT | SNOOP_EN_BIT));
 
 	/*
@@ -180,7 +182,8 @@ void cci_disable_snoop_dvm_reqs(unsigned int master_id)
 	dsbish();
 
 	/* Wait for the dust to settle down */
-	while ((mmio_read_32(cci_base + STATUS_REG) & CHANGE_PENDING_BIT) != 0U)
+	while ((mmio_read_32(cci_base + STATUS_REG) & CHANGE_PENDING_BIT) != 0U) {
 		;
+	}
 }
 

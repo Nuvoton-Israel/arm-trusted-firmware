@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2024, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2015-2025, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -17,6 +17,9 @@
 #include <drivers/st/bsec.h>
 #include <drivers/st/regulator_fixed.h>
 #include <drivers/st/stm32_iwdg.h>
+#if STM32MP13
+#include <drivers/st/stm32_mce.h>
+#endif
 #include <drivers/st/stm32_rng.h>
 #include <drivers/st/stm32_uart.h>
 #include <drivers/st/stm32mp1_clk.h>
@@ -331,7 +334,7 @@ skip_console_init:
 		print_pmic_info_and_debug();
 	}
 
-	stm32mp1_syscfg_init();
+	stm32mp_syscfg_init();
 
 	if (stm32_iwdg_init() < 0) {
 		panic();
@@ -365,12 +368,32 @@ skip_console_init:
 	}
 #endif
 
-	stm32mp1_syscfg_enable_io_compensation_finish();
+	stm32mp_syscfg_enable_io_compensation_finish();
 
 	fconf_populate("TB_FW", STM32MP_DTB_BASE);
 
 	stm32mp_io_setup();
 }
+
+#if STM32MP13
+static void prepare_encryption(void)
+{
+	uint8_t mkey[MCE_KEY_SIZE_IN_BYTES];
+
+	stm32_mce_init();
+
+	/* Generate MCE master key from RNG */
+	if (stm32_rng_read(mkey, MCE_KEY_SIZE_IN_BYTES) != 0) {
+		panic();
+	}
+
+	if (stm32_mce_write_master_key(mkey) != 0) {
+		panic();
+	}
+
+	stm32_mce_lock_master_key();
+}
+#endif
 
 /*******************************************************************************
  * This function can be used by the platforms to update/use image
@@ -399,6 +422,12 @@ int bl2_plat_handle_post_image_load(unsigned int image_id)
 
 	switch (image_id) {
 	case FW_CONFIG_ID:
+#if STM32MP13
+		if ((stm32mp_check_closed_device() == STM32MP_CHIP_SEC_CLOSED) ||
+		    stm32mp_is_auth_supported()) {
+			prepare_encryption();
+		}
+#endif
 		/* Set global DTB info for fixed fw_config information */
 		set_config_info(STM32MP_FW_CONFIG_BASE, ~0UL, STM32MP_FW_CONFIG_MAX_SIZE,
 				FW_CONFIG_ID);
@@ -461,7 +490,8 @@ int bl2_plat_handle_post_image_load(unsigned int image_id)
 		break;
 
 	case BL32_IMAGE_ID:
-		if (optee_header_is_valid(bl_mem_params->image_info.image_base)) {
+		if ((bl_mem_params->image_info.image_base != 0UL) &&
+		    (optee_header_is_valid(bl_mem_params->image_info.image_base))) {
 			image_info_t *paged_image_info = NULL;
 
 			/* BL32 is OP-TEE header */
@@ -507,7 +537,7 @@ int bl2_plat_handle_post_image_load(unsigned int image_id)
 		assert(bl32_mem_params != NULL);
 		bl32_mem_params->ep_info.lr_svc = bl_mem_params->ep_info.pc;
 #if PSA_FWU_SUPPORT
-		stm32mp1_fwu_set_boot_idx();
+		stm32_fwu_set_boot_idx();
 #endif /* PSA_FWU_SUPPORT */
 		break;
 

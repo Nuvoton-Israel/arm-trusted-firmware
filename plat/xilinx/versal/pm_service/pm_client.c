@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2022, Xilinx, Inc. All rights reserved.
- * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -26,9 +26,9 @@
 #include "pm_defs.h"
 #include <versal_def.h>
 
-#define UNDEFINED_CPUID		(~0)
+#define UNDEFINED_CPUID		(~0U)
 
-DEFINE_BAKERY_LOCK(pm_client_secure_lock);
+static DEFINE_BAKERY_LOCK(pm_client_secure_lock);
 
 static const struct pm_ipi apu_ipi = {
 	.local_ipi_id = IPI_LOCAL_ID,
@@ -155,6 +155,9 @@ enum pm_device_node_idx irq_to_pm_node_idx(uint32_t irq)
 	case 74:
 		dev_idx = XPM_NODEIDX_DEV_USB_0;
 		break;
+	case 122:
+		dev_idx = XPM_NODEIDX_DEV_GPIO_PMC;
+		break;
 	case 126:
 	case 127:
 		dev_idx = XPM_NODEIDX_DEV_SDIO_0;
@@ -178,44 +181,25 @@ enum pm_device_node_idx irq_to_pm_node_idx(uint32_t irq)
  * pm_client_suspend() - Client-specific suspend actions.
  * @proc: processor which need to suspend.
  * @state: desired suspend state.
+ * @flag: 0 - Call from secure source.
+ *	  1 - Call from non-secure source.
  *
  * This function should contain any PU-specific actions
  * required prior to sending suspend request to PMU
  * Actions taken depend on the state system is suspending to.
  *
  */
-void pm_client_suspend(const struct pm_proc *proc, uint32_t state)
+void pm_client_suspend(const struct pm_proc *proc, uint32_t state, uint32_t flag)
 {
 	bakery_lock_get(&pm_client_secure_lock);
 
 	if (state == PM_STATE_SUSPEND_TO_RAM) {
-		pm_client_set_wakeup_sources((uint32_t)proc->node_id);
+		pm_client_set_wakeup_sources((uint32_t)proc->node_id, flag);
 	}
 
 	/* Set powerdown request */
 	mmio_write_32(FPD_APU_PWRCTL, mmio_read_32(FPD_APU_PWRCTL) |
 		      (uint32_t)proc->pwrdn_mask);
-
-	bakery_lock_release(&pm_client_secure_lock);
-}
-
-/**
- * pm_client_abort_suspend() - Client-specific abort-suspend actions.
- *
- * This function should contain any PU-specific actions
- * required for aborting a prior suspend request.
- *
- */
-void pm_client_abort_suspend(void)
-{
-	/* Enable interrupts at processor level (for current cpu) */
-	gicv3_cpuif_enable(plat_my_core_pos());
-
-	bakery_lock_get(&pm_client_secure_lock);
-
-	/* Clear powerdown request */
-	mmio_write_32(FPD_APU_PWRCTL, mmio_read_32(FPD_APU_PWRCTL) &
-		      ~((uint32_t)primary_proc->pwrdn_mask));
 
 	bakery_lock_release(&pm_client_secure_lock);
 }
@@ -229,12 +213,16 @@ void pm_client_abort_suspend(void)
  */
 static uint32_t pm_get_cpuid(uint32_t nid)
 {
-	for (size_t i = 0U; i < ARRAY_SIZE(pm_procs_all); i++) {
+	uint32_t ret = UNDEFINED_CPUID;
+	uint32_t i;
+
+	for (i = 0U; i < ARRAY_SIZE(pm_procs_all); i++) {
 		if (pm_procs_all[i].node_id == nid) {
-			return i;
+			ret = i;
+			break;
 		}
 	}
-	return UNDEFINED_CPUID;
+	return ret;
 }
 
 /**

@@ -49,7 +49,6 @@ BL31_SOURCES		+=	common/desc_image_load.c			\
 				drivers/arm/tzc/tzc380.c			\
 				drivers/delay_timer/delay_timer.c		\
 				drivers/delay_timer/generic_delay_timer.c	\
-				${IMX_DRAM_SOURCES}				\
 				${IMX_GIC_SOURCES}				\
 				${XLAT_TABLES_LIB_SRCS}
 
@@ -110,10 +109,11 @@ ifneq (${TRUSTED_BOARD_BOOT},0)
 include drivers/auth/mbedtls/mbedtls_crypto.mk
 include drivers/auth/mbedtls/mbedtls_x509.mk
 
-AUTH_SOURCES	:=	drivers/auth/auth_mod.c			\
-			drivers/auth/crypto_mod.c		\
-			drivers/auth/img_parser_mod.c		\
-			drivers/auth/tbbr/tbbr_cot_common.c     \
+AUTH_MK := drivers/auth/auth.mk
+$(info Including ${AUTH_MK})
+include ${AUTH_MK}
+
+AUTH_SOURCES	+=	drivers/auth/tbbr/tbbr_cot_common.c     \
 			drivers/auth/tbbr/tbbr_cot_bl2.c
 
 BL2_SOURCES		+=	${AUTH_SOURCES}					\
@@ -125,21 +125,20 @@ ROT_KEY             = $(BUILD_PLAT)/rot_key.pem
 ROTPK_HASH          = $(BUILD_PLAT)/rotpk_sha256.bin
 
 $(eval $(call add_define_val,ROTPK_HASH,'"$(ROTPK_HASH)"'))
-$(eval $(call MAKE_LIB_DIRS))
 
 $(BUILD_PLAT)/bl2/imx8mp_rotpk.o: $(ROTPK_HASH)
 
 certificates: $(ROT_KEY)
 
-$(ROT_KEY): | $(BUILD_PLAT)
-	@echo "  OPENSSL $@"
-	@if [ ! -f $(ROT_KEY) ]; then \
+$(ROT_KEY): | $$(@D)/
+	$(s)echo "  OPENSSL $@"
+	$(q)if [ ! -f $(ROT_KEY) ]; then \
 		${OPENSSL_BIN_PATH}/openssl genrsa 2048 > $@ 2>/dev/null; \
 	fi
 
-$(ROTPK_HASH): $(ROT_KEY)
-	@echo "  OPENSSL $@"
-	$(Q)${OPENSSL_BIN_PATH}/openssl rsa -in $< -pubout -outform DER 2>/dev/null |\
+$(ROTPK_HASH): $(ROT_KEY) | $$(@D)/
+	$(s)echo "  OPENSSL $@"
+	$(q)${OPENSSL_BIN_PATH}/openssl rsa -in $< -pubout -outform DER 2>/dev/null |\
 	${OPENSSL_BIN_PATH}/openssl dgst -sha256 -binary > $@ 2>/dev/null
 endif
 
@@ -151,6 +150,15 @@ A53_DISABLE_NON_TEMPORAL_HINT := 0
 ERRATA_A53_835769	:=	1
 ERRATA_A53_843419	:=	1
 ERRATA_A53_855873	:=	1
+ERRATA_A53_1530924	:=	1
+
+IMX_DRAM_RETENTION	?=	1
+$(eval $(call assert_boolean,IMX_DRAM_RETENTION))
+$(eval $(call add_define,IMX_DRAM_RETENTION))
+
+ifeq (${IMX_DRAM_RETENTION},1)
+BL31_SOURCES		+=	${IMX_DRAM_SOURCES}
+endif
 
 ifneq (${PRELOADED_BL33_BASE},)
 $(eval $(call add_define_val,PLAT_NS_IMAGE_OFFSET,${PRELOADED_BL33_BASE}))

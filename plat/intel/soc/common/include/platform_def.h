@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2019-2022, ARM Limited and Contributors. All rights reserved.
  * Copyright (c) 2019-2023, Intel Corporation. All rights reserved.
+ * Copyright (c) 2024-2025, Altera Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -21,32 +22,38 @@
 #define PLAT_SOCFPGA_AGILEX5			4
 #define SIMICS_RUN				1
 #define MAX_IO_MTD_DEVICES			U(1)
+/* Boot Source configuration
+ * TODO: Shall consider "assert_numeric" in the future
+ */
+#if SOCFPGA_BOOT_SOURCE_NAND
+#define BOOT_SOURCE						BOOT_SOURCE_NAND
+#elif SOCFPGA_BOOT_SOURCE_SDMMC
+#define BOOT_SOURCE						BOOT_SOURCE_SDMMC
+#elif SOCFPGA_BOOT_SOURCE_QSPI
+#define BOOT_SOURCE						BOOT_SOURCE_QSPI
+#else
+#define BOOT_SOURCE						BOOT_SOURCE_SDMMC
+#endif
 
 /* sysmgr.boot_scratch_cold4 & 5 used for CPU release address for SPL */
 #define PLAT_CPU_RELEASE_ADDR			0xffd12210
 
-/* Magic word to indicate L2 reset is completed */
-#define L2_RESET_DONE_STATUS			0x1228E5E7
-
 /* Define next boot image name and offset */
 /* Get non-secure image entrypoint for BL33. Zephyr and Linux */
-#if	PLATFORM_MODEL == PLAT_SOCFPGA_AGILEX5
-
-#ifndef PRELOADED_BL33_BASE
+#ifdef PRELOADED_BL33_BASE
+#define PLAT_NS_IMAGE_OFFSET			PRELOADED_BL33_BASE
+#else
+#if PLATFORM_MODEL == PLAT_SOCFPGA_AGILEX5
 #define PLAT_NS_IMAGE_OFFSET			0x80200000
 #else
-#define PLAT_NS_IMAGE_OFFSET			PRELOADED_BL33_BASE
-#endif
-#define PLAT_HANDOFF_OFFSET 0x0003F000
-
-#else
 #define PLAT_NS_IMAGE_OFFSET			0x10000000
-#define PLAT_HANDOFF_OFFSET			0xFFE3F000
 #endif
+#endif /* #if PLATFORM_MODEL == PLAT_SOCFPGA_AGILEX5 */
 
 #define PLAT_QSPI_DATA_BASE			(0x3C00000)
 #define PLAT_NAND_DATA_BASE			(0x0200000)
 #define PLAT_SDMMC_DATA_BASE			(0x0)
+
 
 /*******************************************************************************
  * Platform binary types for linking
@@ -199,6 +206,9 @@
 #define MAX_IO_HANDLES				4
 #define MAX_IO_DEVICES				4
 #define MAX_IO_BLOCK_DEVICES			2
+
+/* Define this, to support the SiPSVC V3 implementation. */
+#define SIP_SVC_V3				1
 
 #ifndef __ASSEMBLER__
 struct socfpga_bl31_params {

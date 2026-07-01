@@ -1,5 +1,6 @@
 #
-# Copyright (c) 2020-2022, Intel Corporation. All rights reserved.
+# Copyright (c) 2019-2023, Intel Corporation. All rights reserved.
+# Copyright (c) 2024-2025, Altera Corporation. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -26,7 +27,8 @@ PLAT_BL_COMMON_SOURCES	:=	\
 			plat/intel/soc/common/aarch64/platform_common.c \
 			plat/intel/soc/common/aarch64/plat_helpers.S	\
 			plat/intel/soc/common/socfpga_delay_timer.c     \
-			plat/intel/soc/common/drivers/ccu/ncore_ccu.c
+			plat/intel/soc/common/drivers/ccu/ncore_ccu.c	\
+			plat/intel/soc/common/lib/utils/alignment_utils.c
 
 BL2_SOURCES     +=
 
@@ -46,9 +48,36 @@ BL31_SOURCES	+=	\
 		plat/intel/soc/common/soc/socfpga_mailbox.c		\
 		plat/intel/soc/common/soc/socfpga_reset_manager.c
 
+# Don't have the Linux kernel as a BL33 image by default
+ARM_LINUX_KERNEL_AS_BL33	:=	0
+$(eval $(call assert_boolean,ARM_LINUX_KERNEL_AS_BL33))
+$(eval $(call add_define,ARM_LINUX_KERNEL_AS_BL33))
 $(eval $(call add_define,ARM_PRELOADED_DTB_BASE))
+
+# Configs for Boot Source
+SOCFPGA_BOOT_SOURCE_SDMMC		?=	0
+SOCFPGA_BOOT_SOURCE_QSPI		?=	0
+SOCFPGA_BOOT_SOURCE_NAND		?=	0
+
+$(eval $(call assert_booleans,\
+	$(sort \
+		SOCFPGA_BOOT_SOURCE_SDMMC \
+		SOCFPGA_BOOT_SOURCE_QSPI \
+		SOCFPGA_BOOT_SOURCE_NAND \
+)))
+$(eval $(call add_defines,\
+	$(sort \
+		SOCFPGA_BOOT_SOURCE_SDMMC \
+		SOCFPGA_BOOT_SOURCE_QSPI \
+		SOCFPGA_BOOT_SOURCE_NAND \
+)))
 
 PROGRAMMABLE_RESET_ADDRESS	:= 0
 RESET_TO_BL2			:= 1
 BL2_INV_DCACHE			:= 0
 USE_COHERENT_MEM		:= 1
+
+#To get the TF-A version via SMC calls
+DEFINES += -DVERSION_MAJOR=${VERSION_MAJOR}
+DEFINES += -DVERSION_MINOR=${VERSION_MINOR}
+DEFINES += -DVERSION_PATCH=${VERSION_PATCH}

@@ -8,9 +8,10 @@
 #include <plat/common/platform.h>
 
 #include <platform_def.h>
+#include <plat_clkfunc.h>
 #include <plat_private.h>
 
-uint32_t plat_get_syscnt_freq2(void)
+unsigned int plat_get_syscnt_freq2(void)
 {
 	uint32_t counter_freq = 0;
 	uint32_t ret = 0;
@@ -25,7 +26,7 @@ uint32_t plat_get_syscnt_freq2(void)
 		ret = cpu_clock;
 	}
 
-	return ret;
+	return (unsigned int)ret;
 }
 
 void set_cnt_freq(void)

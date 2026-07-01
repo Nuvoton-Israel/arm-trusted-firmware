@@ -102,22 +102,6 @@ static int qemu_validate_power_state(unsigned int power_state,
 }
 
 /*******************************************************************************
- * Platform handler called to check the validity of the non secure
- * entrypoint.
- ******************************************************************************/
-static int qemu_validate_ns_entrypoint(uintptr_t entrypoint)
-{
-	/*
-	 * Check if the non secure entrypoint lies within the non
-	 * secure DRAM.
-	 */
-	if ((entrypoint >= NS_DRAM0_BASE) &&
-	    (entrypoint < (NS_DRAM0_BASE + NS_DRAM0_SIZE)))
-		return PSCI_E_SUCCESS;
-	return PSCI_E_INVALID_ADDRESS;
-}
-
-/*******************************************************************************
  * Platform handler called when a CPU is about to enter standby.
  ******************************************************************************/
 static void qemu_cpu_standby(plat_local_state_t cpu_state)
@@ -234,14 +218,13 @@ static const plat_psci_ops_t plat_qemu_psci_pm_ops = {
 	.cpu_standby = qemu_cpu_standby,
 	.pwr_domain_on = qemu_pwr_domain_on,
 	.pwr_domain_off = qemu_pwr_domain_off,
-	.pwr_domain_pwr_down_wfi = qemu_pwr_domain_pwr_down_wfi,
+	.pwr_domain_pwr_down = qemu_pwr_domain_pwr_down_wfi,
 	.pwr_domain_suspend = qemu_pwr_domain_suspend,
 	.pwr_domain_on_finish = qemu_pwr_domain_on_finish,
 	.pwr_domain_suspend_finish = qemu_pwr_domain_suspend_finish,
 	.system_off = qemu_system_off,
 	.system_reset = qemu_system_reset,
 	.validate_power_state = qemu_validate_power_state,
-	.validate_ns_entrypoint = qemu_validate_ns_entrypoint
 };
 
 int plat_setup_psci_ops(uintptr_t sec_entrypoint,

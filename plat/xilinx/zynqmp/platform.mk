@@ -2,7 +2,7 @@
 # Copyright (c) 2013-2021, Arm Limited and Contributors. All rights reserved.
 # Portions copyright (c) 2021-2022, ProvenRun S.A.S. All rights reserved.
 # Copyright (c) 2018-2022, Xilinx, Inc. All rights reserved.
-# Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2022-2024, Advanced Micro Devices, Inc. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -16,11 +16,12 @@ ZYNQMP_WDT_RESTART := 0
 IPI_CRC_CHECK := 0
 override RESET_TO_BL31 := 1
 override WARMBOOT_ENABLE_DCACHE_EARLY := 1
+ENABLE_LTO := 1
 
 EL3_EXCEPTION_HANDLING := $(SDEI_SUPPORT)
 
 # pncd SPD requires secure SGI to be handled at EL1
-ifeq (${SPD}, $(filter ${SPD},pncd tspd))
+ifeq (${SPD}, $(filter ${SPD},pncd tspd opteed))
 ifeq (${ZYNQMP_WDT_RESTART},1)
 $(error "Error: ZYNQMP_WDT_RESTART and SPD=pncd are incompatible")
 endif
@@ -34,15 +35,11 @@ ENABLE_SVE_FOR_NS	:= 0
 
 WORKAROUND_CVE_2017_5715	:=	0
 
-ARM_XLAT_TABLES_LIB_V1		:=	1
-$(eval $(call assert_boolean,ARM_XLAT_TABLES_LIB_V1))
-$(eval $(call add_define,ARM_XLAT_TABLES_LIB_V1))
-
 ifdef ZYNQMP_ATF_MEM_BASE
     $(eval $(call add_define,ZYNQMP_ATF_MEM_BASE))
 
     ifndef ZYNQMP_ATF_MEM_SIZE
-        $(error "ZYNQMP_ATF_BASE defined without ZYNQMP_ATF_SIZE")
+        $(error "ZYNQMP_ATF_MEM_BASE defined without ZYNQMP_ATF_MEM_SIZE")
     endif
     $(eval $(call add_define,ZYNQMP_ATF_MEM_SIZE))
 
@@ -59,7 +56,7 @@ ifdef ZYNQMP_BL32_MEM_BASE
     $(eval $(call add_define,ZYNQMP_BL32_MEM_BASE))
 
     ifndef ZYNQMP_BL32_MEM_SIZE
-        $(error "ZYNQMP_BL32_BASE defined without ZYNQMP_BL32_SIZE")
+        $(error "ZYNQMP_BL32_MEM_BASE defined without ZYNQMP_BL32_MEM_SIZE")
     endif
     $(eval $(call add_define,ZYNQMP_BL32_MEM_SIZE))
 endif
@@ -95,30 +92,44 @@ PLAT_INCLUDES		:=	-Iinclude/plat/arm/common/			\
 include lib/libfdt/libfdt.mk
 # Include GICv2 driver files
 include drivers/arm/gic/v2/gicv2.mk
+include lib/xlat_tables_v2/xlat_tables.mk
 
-PLAT_BL_COMMON_SOURCES	:=	lib/xlat_tables/xlat_tables_common.c		\
-				lib/xlat_tables/aarch64/xlat_tables.c		\
-				drivers/arm/dcc/dcc_console.c			\
+PLAT_BL_COMMON_SOURCES	:=	drivers/arm/dcc/dcc_console.c			\
 				drivers/delay_timer/delay_timer.c		\
 				drivers/delay_timer/generic_delay_timer.c	\
 				${GICV2_SOURCES}				\
 				drivers/cadence/uart/aarch64/cdns_console.S	\
 				plat/arm/common/arm_cci.c			\
 				plat/arm/common/arm_common.c			\
-				plat/arm/common/arm_gicv2.c			\
+				plat/common/plat_gicv2_base.c			\
 				plat/common/plat_gicv2.c			\
 				plat/xilinx/common/ipi.c			\
 				plat/xilinx/zynqmp/zynqmp_ipi.c			\
 				plat/common/aarch64/crash_console_helpers.S	\
 				plat/xilinx/zynqmp/aarch64/zynqmp_helpers.S	\
-				plat/xilinx/zynqmp/aarch64/zynqmp_common.c
+				plat/xilinx/zynqmp/aarch64/zynqmp_common.c	\
+				${XLAT_TABLES_LIB_SRCS}
 
 ZYNQMP_CONSOLE	?=	cadence
-ifeq (${ZYNQMP_CONSOLE}, $(filter ${ZYNQMP_CONSOLE},cadence cadence0 cadence1 dcc))
+ifeq (${ZYNQMP_CONSOLE}, $(filter ${ZYNQMP_CONSOLE},cadence cadence0 cadence1 dcc dtb none))
 else
   $(error "Please define ZYNQMP_CONSOLE")
 endif
 $(eval $(call add_define_val,ZYNQMP_CONSOLE,ZYNQMP_CONSOLE_ID_${ZYNQMP_CONSOLE}))
+
+# Runtime console in default console in DEBUG build
+ifeq ($(DEBUG), 1)
+CONSOLE_RUNTIME ?= $(ZYNQMP_CONSOLE)
+endif
+
+# Runtime console
+ifdef CONSOLE_RUNTIME
+ifeq (${CONSOLE_RUNTIME}, $(filter ${CONSOLE_RUNTIME},cadence cadence0 cadence1 dcc dtb))
+$(eval $(call add_define_val,CONSOLE_RUNTIME,RT_CONSOLE_ID_${CONSOLE_RUNTIME}))
+else
+$(error "Please define CONSOLE_RUNTIME")
+endif
+endif
 
 # Build PM code as a Library
 include plat/xilinx/zynqmp/libpm.mk
@@ -151,7 +162,7 @@ TF_CFLAGS_aarch64	+=	-mbranch-protection=none
 ifdef CUSTOM_PKG_PATH
 include $(CUSTOM_PKG_PATH)/custom_pkg.mk
 else
-BL31_SOURCES		+=	plat/xilinx/zynqmp/custom_sip_svc.c
+BL31_SOURCES		+=	plat/xilinx/common/custom_sip_svc.c
 endif
 
 ifneq (${RESET_TO_BL31},1)

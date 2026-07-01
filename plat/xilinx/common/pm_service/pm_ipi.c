@@ -1,13 +1,14 @@
 /*
  * Copyright (c) 2013-2020, Arm Limited and Contributors. All rights reserved.
  * Copyright (c) 2019-2022, Xilinx, Inc. All rights reserved.
- * Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
 
 #include <arch_helpers.h>
+#include <common/debug.h>
 #include <lib/bakery_lock.h>
 #include <lib/mmio.h>
 #include <lib/spinlock.h>
@@ -27,7 +28,7 @@
  * power down. Therefore, there is no doubt to use the spin_lock here.
  */
 #if !HW_ASSISTED_COHERENCY
-DEFINE_BAKERY_LOCK(pm_secure_lock);
+static DEFINE_BAKERY_LOCK(pm_secure_lock);
 static inline void pm_ipi_lock_get(void)
 {
 	bakery_lock_get(&pm_secure_lock);
@@ -169,9 +170,7 @@ static enum pm_ret_status pm_ipi_buff_read(const struct pm_proc *proc,
 	size_t i;
 	enum pm_ret_status ret;
 #if IPI_CRC_CHECK
-	uint32_t *payload_ptr = value;
-	size_t j;
-	uint32_t response_payload[PAYLOAD_ARG_CNT];
+	uint32_t crc;
 #endif
 	uintptr_t buffer_base = proc->ipi->buffer_base +
 				IPI_BUFFER_TARGET_REMOTE_OFFSET +
@@ -184,27 +183,25 @@ static enum pm_ret_status pm_ipi_buff_read(const struct pm_proc *proc,
 	 * buf-2: unused
 	 * buf-3: unused
 	 */
-	for (i = 1; i <= count; i++) {
-		*value = mmio_read_32(buffer_base + (i * PAYLOAD_ARG_SIZE));
-		value++;
+	for (i = 0U; i < count; i++) {
+		value[i] = mmio_read_32(buffer_base + ((i + 1U) * PAYLOAD_ARG_SIZE));
 	}
 
-	ret = mmio_read_32(buffer_base);
+	/*
+	 * Here mmio_read_32() reads return status stored in IPI payload that
+	 * is received from firmware and it's value will be one the values
+	 * listed in enum pm_ret_status.
+	 */
+	ret = (enum pm_ret_status)mmio_read_32(buffer_base);
 #if IPI_CRC_CHECK
-	for (j = 0; j < PAYLOAD_ARG_CNT; j++) {
-		response_payload[j] = mmio_read_32(buffer_base +
-						(j * PAYLOAD_ARG_SIZE));
-	}
-
-	if (response_payload[PAYLOAD_CRC_POS] !=
-			calculate_crc(response_payload, IPI_W0_TO_W6_SIZE)) {
-		NOTICE("ERROR in CRC response payload value:0x%x\n",
-					response_payload[PAYLOAD_CRC_POS]);
+	crc = mmio_read_32(buffer_base + (PAYLOAD_CRC_POS * PAYLOAD_ARG_SIZE));
+	if (crc != calculate_crc((uint32_t *)buffer_base, IPI_W0_TO_W6_SIZE)) {
+		NOTICE("ERROR in CRC response payload value:0x%x\n", crc);
 		ret = PM_RET_ERROR_INVALID_CRC;
 		/* Payload data is invalid as CRC validation failed
 		 * Clear the payload to avoid leakage of data to upper layers
 		 */
-		memset(payload_ptr, 0, count);
+		memset(value, 0, count);
 	}
 #endif
 
@@ -227,38 +224,30 @@ enum pm_ret_status pm_ipi_buff_read_callb(uint32_t *value, size_t count)
 {
 	size_t i;
 #if IPI_CRC_CHECK
-	uint32_t *payload_ptr = value;
-	size_t j;
-	unsigned int response_payload[PAYLOAD_ARG_CNT] = {0};
+	size_t local_count = count;
+	uint32_t crc;
 #endif
 	uintptr_t buffer_base = IPI_BUFFER_REMOTE_BASE +
 				IPI_BUFFER_TARGET_LOCAL_OFFSET +
 				IPI_BUFFER_REQ_OFFSET;
 	enum pm_ret_status ret = PM_RET_SUCCESS;
 
-	if (count > IPI_BUFFER_MAX_WORDS) {
-		count = IPI_BUFFER_MAX_WORDS;
-	}
-
-	for (i = 0; i <= count; i++) {
-		*value = mmio_read_32(buffer_base + (i * PAYLOAD_ARG_SIZE));
-		value++;
+	for (i = 0; i < count; i++) {
+		value[i] = mmio_read_32(buffer_base + (i * PAYLOAD_ARG_SIZE));
 	}
 #if IPI_CRC_CHECK
-	for (j = 0; j < PAYLOAD_ARG_CNT; j++) {
-		response_payload[j] = mmio_read_32(buffer_base +
-						(j * PAYLOAD_ARG_SIZE));
+	if (local_count > (uint32_t)IPI_BUFFER_MAX_WORDS) {
+		local_count = IPI_BUFFER_MAX_WORDS;
 	}
 
-	if (response_payload[PAYLOAD_CRC_POS] !=
-			calculate_crc(response_payload, IPI_W0_TO_W6_SIZE)) {
-		NOTICE("ERROR in CRC response payload value:0x%x\n",
-					response_payload[PAYLOAD_CRC_POS]);
+	crc = mmio_read_32(buffer_base + (PAYLOAD_CRC_POS * PAYLOAD_ARG_SIZE));
+	if (crc != calculate_crc((uint32_t *)buffer_base, IPI_W0_TO_W6_SIZE)) {
+		NOTICE("ERROR in CRC response payload value:0x%x\n", crc);
 		ret = PM_RET_ERROR_INVALID_CRC;
 		/* Payload data is invalid as CRC validation failed
 		 * Clear the payload to avoid leakage of data to upper layers
 		 */
-		memset(payload_ptr, 0, count);
+		memset(value, 0, local_count);
 	}
 #endif
 	return ret;
@@ -290,7 +279,8 @@ enum pm_ret_status pm_ipi_send_sync(const struct pm_proc *proc,
 		goto unlock;
 	}
 
-	ret = ERROR_CODE_MASK & (pm_ipi_buff_read(proc, value, count));
+	ret = (enum pm_ret_status)(ERROR_CODE_MASK &
+				   (uint32_t)(pm_ipi_buff_read(proc, value, count)));
 
 unlock:
 	pm_ipi_lock_release();
@@ -310,19 +300,20 @@ void pm_ipi_irq_clear(const struct pm_proc *proc)
 
 uint32_t pm_ipi_irq_status(const struct pm_proc *proc)
 {
-	int32_t ret;
+	uint32_t ret;
+	uint32_t result = (uint32_t)PM_RET_SUCCESS;
 
 	ret = ipi_mb_enquire_status(proc->ipi->local_ipi_id,
 				    proc->ipi->remote_ipi_id);
-	if (ret & IPI_MB_STATUS_RECV_PENDING) {
-		return 1;
-	} else {
-		return 0;
+	if ((ret & IPI_MB_STATUS_RECV_PENDING) != 0U) {
+		result = IPI_MB_STATUS_RECV_PENDING;
 	}
+
+	return result;
 }
 
 #if IPI_CRC_CHECK
-uint32_t calculate_crc(uint32_t payload[PAYLOAD_ARG_CNT], uint32_t bufsize)
+uint32_t calculate_crc(uint32_t payload[PAYLOAD_ARG_CNT], uint32_t buffersize)
 {
 	uint32_t crcinit = CRC_INIT_VALUE;
 	uint32_t order   = CRC_ORDER;
@@ -330,20 +321,22 @@ uint32_t calculate_crc(uint32_t payload[PAYLOAD_ARG_CNT], uint32_t bufsize)
 	uint32_t i, j, c, bit, datain, crcmask, crchighbit;
 	uint32_t crc = crcinit;
 
-	crcmask = ((uint32_t)((1U << (order - 1U)) - 1U) << 1U) | 1U;
-	crchighbit = (uint32_t)(1U << (order - 1U));
+	crcmask = ((((uint32_t)1U << (order - 1U)) - 1U) << 1U) | 1U;
+	crchighbit = ((uint32_t)1U << (order - 1U));
 
-	for (i = 0U; i < bufsize; i++) {
+	for (i = 0U; i < buffersize; i++) {
 		datain = mmio_read_8((unsigned long)payload + i);
 		c = datain;
 		j = 0x80U;
 		while (j != 0U) {
 			bit = crc & crchighbit;
 			crc <<= 1U;
-			if (0U != (c & j))
+			if (0U != (c & j)) {
 				bit ^= crchighbit;
-			if (bit != 0U)
+			}
+			if (bit != 0U) {
 				crc ^= polynom;
+			}
 			j >>= 1U;
 		}
 		crc &= crcmask;

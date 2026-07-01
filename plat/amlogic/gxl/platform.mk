@@ -40,6 +40,12 @@ BL31_SOURCES		+=	lib/cpus/aarch64/cortex_a53.S			\
 				${XLAT_TABLES_LIB_SRCS}				\
 				${GIC_SOURCES}
 
+ifeq (${AML_STDPARAMS}, 1)
+    BL31_SOURCES	+=	common/desc_image_load.c
+    $(eval $(call add_define_val,AML_STDPARAMS,'$(AML_STDPARAMS)'))
+    $(info "Building with standard params")
+endif
+
 # Tune compiler for Cortex-A53
 ifeq ($($(ARCH)-cc-id),arm-clang)
     TF_CFLAGS_aarch64	+=	-mcpu=cortex-a53
@@ -81,10 +87,10 @@ all: ${BUILD_PLAT}/bl31.img
 distclean realclean clean: cleanimage
 
 cleanimage:
-	${Q}${MAKE} -C ${DOIMAGEPATH} clean
+	$(q)${MAKE} -C ${DOIMAGEPATH} clean
 
 ${DOIMAGETOOL}:
-	${Q}${MAKE} -C ${DOIMAGEPATH}
+	$(q)${MAKE} -C ${DOIMAGEPATH}
 
 ${BUILD_PLAT}/bl31.img: ${BUILD_PLAT}/bl31.bin ${DOIMAGETOOL}
 	${DOIMAGETOOL} ${BUILD_PLAT}/bl31.bin ${BUILD_PLAT}/bl31.img

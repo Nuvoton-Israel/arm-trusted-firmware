@@ -6,7 +6,8 @@ Tools
    :caption: Contents
 
    memory-layout-tool
+   cot-dt2c
 
 --------------
 
-*Copyright (c) 2023, Arm Limited. All rights reserved.*
+*Copyright (c) 2023-2025, Arm Limited. All rights reserved.*

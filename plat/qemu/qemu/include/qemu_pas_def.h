@@ -22,7 +22,7 @@
  *             | 1GB     |L0 GPT|ANY   |Flash            |
  *    00000000 |         |      |      |IO               |
  * ---------------------------------------------------------------------------
- *       224MB | 1KB     |L0 GPT|ANY   |Secure RAM (EL3) |
+ *       224MB | 1KB     |L1 GPT|ANY   |Secure RAM (EL3) |
  *    0e000000 |         |      |      |  (shared)       |
  * ---------------------------------------------------------------------------
  *             | 1MB-1KB |L1 GPT|ROOT  |Secure RAM (EL3) |
@@ -31,10 +31,10 @@
  *       225MB | 14MB    |L1 GPT|SECURE|Secure RAM       |
  *    0e100000 |         |      |      |  (EL2, EL1)     |
  * ---------------------------------------------------------------------------
- *             | 1MB+8KB |L1 GPT|ROOT  |L0 and L1 GPTs   |
- *    0eefe000 |         |      |      |                 |
+ *             | 2MB     |L1 GPT|ROOT  |L0 and L1 GPTs,  |
+ *    0edfc000 |  +16KB  |      |      | bitlocks        |
  * ---------------------------------------------------------------------------
- *       240MB | 800MB   |L0 GPT|ANY   |IO               |
+ *       240MB | 800MB   |L1 GPT|ANY   |IO               |
  *    0f000000 |         |      |      |                 |
  * ---------------------------------------------------------------------------
  *         1GB | 1MB     |L1 GPT|NS    |DRAM             |
@@ -101,6 +101,10 @@
 							       QEMU_PAS_RMM_SIZE + \
 							       QEMU_PAS_RMM_SHARED_SIZE, \
 							       GPT_GPI_REALM)
+
+/* Cover 1TB with L0GTP */
+#define PLAT_QEMU_GPCCR_PPS		GPCCR_PPS_1TB
+#define PLAT_QEMU_PPS			SZ_1T
 
 /* GPT Configuration options */
 #define PLATFORM_L0GPTSZ		GPCCR_L0GPTSZ_30BITS

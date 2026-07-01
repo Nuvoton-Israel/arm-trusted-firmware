@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024, Arm Limited and Contributors. All rights reserved.
+ * Copyright (c) 2013-2025, Arm Limited and Contributors. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -7,9 +7,28 @@
 #ifndef CONTEXT_H
 #define CONTEXT_H
 
+#if (CTX_INCLUDE_EL2_REGS && IMAGE_BL31)
 #include <lib/el3_runtime/context_el2.h>
-#include <lib/el3_runtime/cpu_data.h>
+#else
+/**
+ * El1 context is required either when:
+ * IMAGE_BL1 || ((!CTX_INCLUDE_EL2_REGS) && IMAGE_BL31)
+ */
+#include <lib/el3_runtime/context_el1.h>
+#endif /* (CTX_INCLUDE_EL2_REGS && IMAGE_BL31) */
+
+#include <lib/el3_runtime/simd_ctx.h>
 #include <lib/utils_def.h>
+#include <platform_def.h> /* For CACHE_WRITEBACK_GRANULE */
+
+#define	CPU_CONTEXT_SECURE	UL(0)
+#define	CPU_CONTEXT_NS		UL(1)
+#if ENABLE_RME
+#define	CPU_CONTEXT_REALM	UL(2)
+#define	CPU_CONTEXT_NUM		UL(3)
+#else
+#define	CPU_CONTEXT_NUM		UL(2)
+#endif
 
 /*******************************************************************************
  * Constants that allow assembler code to access members of and the 'gp_regs'
@@ -57,12 +76,12 @@
  ******************************************************************************/
 #define CTX_EL3STATE_OFFSET	(CTX_GPREGS_OFFSET + CTX_GPREGS_END)
 #define CTX_SCR_EL3		U(0x0)
-#define CTX_ESR_EL3		U(0x8)
-#define CTX_RUNTIME_SP		U(0x10)
-#define CTX_SPSR_EL3		U(0x18)
-#define CTX_ELR_EL3		U(0x20)
-#define CTX_PMCR_EL0		U(0x28)
-#define CTX_IS_IN_EL3		U(0x30)
+#define CTX_RUNTIME_SP		U(0x8)
+#define CTX_SPSR_EL3		U(0x10)
+#define CTX_ELR_EL3		U(0x18)
+#define CTX_PMCR_EL0		U(0x20)
+#define CTX_IS_IN_EL3		U(0x28)
+#define CTX_MDCR_EL3		U(0x30)
 /* Constants required in supporting nested exception in EL3 */
 #define CTX_SAVED_ELR_EL3	U(0x38)
 /*
@@ -75,213 +94,68 @@
  #define CTX_SAVED_ESR_EL3	U(0x48)
  #define CTX_SAVED_SPSR_EL3	U(0x50)
  #define CTX_SAVED_GPREG_LR	U(0x58)
- #define CTX_EL3STATE_END	U(0x60) /* Align to the next 16 byte boundary */
+ #define CTX_DOUBLE_FAULT_ESR	U(0x60)
+ #define CTX_EL3STATE_END	U(0x70) /* Align to the next 16 byte boundary */
 #else
  #define CTX_EL3STATE_END	U(0x50) /* Align to the next 16 byte boundary */
 #endif /* FFH_SUPPORT */
 
-/*******************************************************************************
- * Constants that allow assembler code to access members of and the
- * 'el1_sys_regs' structure at their correct offsets. Note that some of the
- * registers are only 32-bits wide but are stored as 64-bit values for
- * convenience
- ******************************************************************************/
-#define CTX_EL1_SYSREGS_OFFSET	(CTX_EL3STATE_OFFSET + CTX_EL3STATE_END)
-#define CTX_SPSR_EL1		U(0x0)
-#define CTX_ELR_EL1		U(0x8)
-#define CTX_SCTLR_EL1		U(0x10)
-#define CTX_TCR_EL1		U(0x18)
-#define CTX_CPACR_EL1		U(0x20)
-#define CTX_CSSELR_EL1		U(0x28)
-#define CTX_SP_EL1		U(0x30)
-#define CTX_ESR_EL1		U(0x38)
-#define CTX_TTBR0_EL1		U(0x40)
-#define CTX_TTBR1_EL1		U(0x48)
-#define CTX_MAIR_EL1		U(0x50)
-#define CTX_AMAIR_EL1		U(0x58)
-#define CTX_ACTLR_EL1		U(0x60)
-#define CTX_TPIDR_EL1		U(0x68)
-#define CTX_TPIDR_EL0		U(0x70)
-#define CTX_TPIDRRO_EL0		U(0x78)
-#define CTX_PAR_EL1		U(0x80)
-#define CTX_FAR_EL1		U(0x88)
-#define CTX_AFSR0_EL1		U(0x90)
-#define CTX_AFSR1_EL1		U(0x98)
-#define CTX_CONTEXTIDR_EL1	U(0xa0)
-#define CTX_VBAR_EL1		U(0xa8)
-#define CTX_MDCCINT_EL1		U(0xb0)
-#define CTX_MDSCR_EL1		U(0xb8)
-
-#define CTX_AARCH64_END		U(0xc0) /* Align to the next 16 byte boundary */
-
-/*
- * If the platform is AArch64-only, there is no need to save and restore these
- * AArch32 registers.
- */
-#if CTX_INCLUDE_AARCH32_REGS
-#define CTX_SPSR_ABT		(CTX_AARCH64_END + U(0x0))
-#define CTX_SPSR_UND		(CTX_AARCH64_END + U(0x8))
-#define CTX_SPSR_IRQ		(CTX_AARCH64_END + U(0x10))
-#define CTX_SPSR_FIQ		(CTX_AARCH64_END + U(0x18))
-#define CTX_DACR32_EL2		(CTX_AARCH64_END + U(0x20))
-#define CTX_IFSR32_EL2		(CTX_AARCH64_END + U(0x28))
-#define CTX_AARCH32_END		(CTX_AARCH64_END + U(0x30)) /* Align to the next 16 byte boundary */
-#else
-#define CTX_AARCH32_END		CTX_AARCH64_END
-#endif /* CTX_INCLUDE_AARCH32_REGS */
-
-/*
- * If the timer registers aren't saved and restored, we don't have to reserve
- * space for them in the context
- */
-#if NS_TIMER_SWITCH
-#define CTX_CNTP_CTL_EL0	(CTX_AARCH32_END + U(0x0))
-#define CTX_CNTP_CVAL_EL0	(CTX_AARCH32_END + U(0x8))
-#define CTX_CNTV_CTL_EL0	(CTX_AARCH32_END + U(0x10))
-#define CTX_CNTV_CVAL_EL0	(CTX_AARCH32_END + U(0x18))
-#define CTX_CNTKCTL_EL1		(CTX_AARCH32_END + U(0x20))
-#define CTX_TIMER_SYSREGS_END	(CTX_AARCH32_END + U(0x30)) /* Align to the next 16 byte boundary */
-#else
-#define CTX_TIMER_SYSREGS_END	CTX_AARCH32_END
-#endif /* NS_TIMER_SWITCH */
-
-#if ENABLE_FEAT_MTE2
-#define CTX_TFSRE0_EL1		(CTX_TIMER_SYSREGS_END + U(0x0))
-#define CTX_TFSR_EL1		(CTX_TIMER_SYSREGS_END + U(0x8))
-#define CTX_RGSR_EL1		(CTX_TIMER_SYSREGS_END + U(0x10))
-#define CTX_GCR_EL1		(CTX_TIMER_SYSREGS_END + U(0x18))
-#define CTX_MTE_REGS_END	(CTX_TIMER_SYSREGS_END + U(0x20)) /* Align to the next 16 byte boundary */
-#else
-#define CTX_MTE_REGS_END	CTX_TIMER_SYSREGS_END
-#endif /* ENABLE_FEAT_MTE2 */
-
-#if ENABLE_FEAT_RAS
-#define CTX_DISR_EL1		(CTX_MTE_REGS_END + U(0x0))
-#define CTX_RAS_REGS_END	(CTX_MTE_REGS_END + U(0x10)) /* Align to the next 16 byte boundary */
-#else
-#define CTX_RAS_REGS_END        CTX_MTE_REGS_END
-#endif /* ENABLE_FEAT_RAS */
-
-#if ENABLE_FEAT_S1PIE
-#define CTX_PIRE0_EL1		(CTX_RAS_REGS_END + U(0x0))
-#define CTX_PIR_EL1		(CTX_RAS_REGS_END + U(0x8))
-#define CTX_S1PIE_REGS_END	(CTX_RAS_REGS_END + U(0x10)) /* Align to the next 16 byte boundary */
-#else
-#define CTX_S1PIE_REGS_END	CTX_RAS_REGS_END
-#endif /* ENABLE_FEAT_S1PIE */
-
-#if ENABLE_FEAT_S1POE
-#define CTX_POR_EL1		(CTX_S1PIE_REGS_END + U(0x0))
-#define CTX_S1POE_REGS_END	(CTX_S1PIE_REGS_END + U(0x10)) /* Align to the next 16 byte boundary */
-#else
-#define CTX_S1POE_REGS_END	CTX_S1PIE_REGS_END
-#endif /* ENABLE_FEAT_S1POE */
-
-#if ENABLE_FEAT_S2POE
-#define CTX_S2POR_EL1		(CTX_S1POE_REGS_END + U(0x0))
-#define CTX_S2POE_REGS_END	(CTX_S1POE_REGS_END + U(0x10)) /* Align to the next 16 byte boundary */
-#else
-#define CTX_S2POE_REGS_END	CTX_S1POE_REGS_END
-#endif /* ENABLE_FEAT_S2POE */
-
-#if ENABLE_FEAT_TCR2
-#define CTX_TCR2_EL1		(CTX_S2POE_REGS_END + U(0x0))
-#define CTX_TCR2_REGS_END	(CTX_S2POE_REGS_END + U(0x10)) /* Align to the next 16 byte boundary */
-#else
-#define CTX_TCR2_REGS_END       CTX_S2POE_REGS_END
-#endif /* ENABLE_FEAT_TCR2 */
-
-#if ENABLE_TRF_FOR_NS
-#define CTX_TRFCR_EL1		(CTX_TCR2_REGS_END + U(0x0))
-#define CTX_TRF_REGS_END	(CTX_TCR2_REGS_END + U(0x10)) /* Align to the next 16 byte boundary */
-#else
-#define CTX_TRF_REGS_END	CTX_TCR2_REGS_END
-#endif /* ENABLE_TRF_FOR_NS */
-
-#if ENABLE_FEAT_CSV2_2
-#define CTX_SCXTNUM_EL0		(CTX_TRF_REGS_END + U(0x0))
-#define CTX_SCXTNUM_EL1		(CTX_TRF_REGS_END + U(0x8))
-#define CTX_CSV2_2_REGS_END	(CTX_TRF_REGS_END + U(0x10)) /* Align to the next 16 byte boundary */
-#else
-#define CTX_CSV2_2_REGS_END	CTX_TRF_REGS_END
-#endif /* ENABLE_FEAT_CSV2_2 */
-
-#if ENABLE_FEAT_GCS
-#define CTX_GCSCR_EL1		(CTX_CSV2_2_REGS_END + U(0x0))
-#define CTX_GCSCRE0_EL1		(CTX_CSV2_2_REGS_END + U(0x8))
-#define CTX_GCSPR_EL1		(CTX_CSV2_2_REGS_END + U(0x10))
-#define CTX_GCSPR_EL0		(CTX_CSV2_2_REGS_END + U(0x18))
-#define CTX_GCS_REGS_END	(CTX_CSV2_2_REGS_END + U(0x20)) /* Align to the next 16 byte boundary */
-#else
-#define CTX_GCS_REGS_END	CTX_CSV2_2_REGS_END
-#endif /* ENABLE_FEAT_GCS */
-
-/*
- * End of EL1 system registers.
- */
-#define CTX_EL1_SYSREGS_END	CTX_GCS_REGS_END
-
-/*******************************************************************************
- * Constants that allow assembler code to access members of and the 'fp_regs'
- * structure at their correct offsets.
- ******************************************************************************/
-# define CTX_FPREGS_OFFSET	(CTX_EL1_SYSREGS_OFFSET + CTX_EL1_SYSREGS_END)
-#if CTX_INCLUDE_FPREGS
-#define CTX_FP_Q0		U(0x0)
-#define CTX_FP_Q1		U(0x10)
-#define CTX_FP_Q2		U(0x20)
-#define CTX_FP_Q3		U(0x30)
-#define CTX_FP_Q4		U(0x40)
-#define CTX_FP_Q5		U(0x50)
-#define CTX_FP_Q6		U(0x60)
-#define CTX_FP_Q7		U(0x70)
-#define CTX_FP_Q8		U(0x80)
-#define CTX_FP_Q9		U(0x90)
-#define CTX_FP_Q10		U(0xa0)
-#define CTX_FP_Q11		U(0xb0)
-#define CTX_FP_Q12		U(0xc0)
-#define CTX_FP_Q13		U(0xd0)
-#define CTX_FP_Q14		U(0xe0)
-#define CTX_FP_Q15		U(0xf0)
-#define CTX_FP_Q16		U(0x100)
-#define CTX_FP_Q17		U(0x110)
-#define CTX_FP_Q18		U(0x120)
-#define CTX_FP_Q19		U(0x130)
-#define CTX_FP_Q20		U(0x140)
-#define CTX_FP_Q21		U(0x150)
-#define CTX_FP_Q22		U(0x160)
-#define CTX_FP_Q23		U(0x170)
-#define CTX_FP_Q24		U(0x180)
-#define CTX_FP_Q25		U(0x190)
-#define CTX_FP_Q26		U(0x1a0)
-#define CTX_FP_Q27		U(0x1b0)
-#define CTX_FP_Q28		U(0x1c0)
-#define CTX_FP_Q29		U(0x1d0)
-#define CTX_FP_Q30		U(0x1e0)
-#define CTX_FP_Q31		U(0x1f0)
-#define CTX_FP_FPSR		U(0x200)
-#define CTX_FP_FPCR		U(0x208)
-#if CTX_INCLUDE_AARCH32_REGS
-#define CTX_FP_FPEXC32_EL2	U(0x210)
-#define CTX_FPREGS_END		U(0x220) /* Align to the next 16 byte boundary */
-#else
-#define CTX_FPREGS_END		U(0x210) /* Align to the next 16 byte boundary */
-#endif /* CTX_INCLUDE_AARCH32_REGS */
-#else
-#define CTX_FPREGS_END		U(0)
-#endif /* CTX_INCLUDE_FPREGS */
 
 /*******************************************************************************
  * Registers related to CVE-2018-3639
  ******************************************************************************/
-#define CTX_CVE_2018_3639_OFFSET	(CTX_FPREGS_OFFSET + CTX_FPREGS_END)
+#define CTX_CVE_2018_3639_OFFSET	(CTX_EL3STATE_OFFSET + CTX_EL3STATE_END)
 #define CTX_CVE_2018_3639_DISABLE	U(0)
 #define CTX_CVE_2018_3639_END		U(0x10) /* Align to the next 16 byte boundary */
 
 /*******************************************************************************
+ * Registers related to ERRATA_SPECULATIVE_AT
+ *
+ * This is essential as with EL1 and EL2 context registers being decoupled,
+ * both will not be present for a given build configuration.
+ * As ERRATA_SPECULATIVE_AT errata requires SCTLR_EL1 and TCR_EL1 registers
+ * independent of the above logic, we need explicit context entries to be
+ * reserved for these registers.
+ *
+ * NOTE: Based on this we end up with following different configurations depending
+ * on the presence of errata and inclusion of EL1 or EL2 context.
+ *
+ * ============================================================================
+ * | ERRATA_SPECULATIVE_AT | EL1 context| Memory allocation(Sctlr_el1,Tcr_el1)|
+ * ============================================================================
+ * |        0              |      0     |            None                     |
+ * |        0              |      1     |    EL1 C-Context structure          |
+ * |        1              |      0     |    Errata Context Offset Entries    |
+ * |        1              |      1     |    Errata Context Offset Entries    |
+ * ============================================================================
+ *
+ * In the above table, when ERRATA_SPECULATIVE_AT=1, EL1_Context=0, it implies
+ * there is only EL2 context and memory for SCTLR_EL1 and TCR_EL1 registers is
+ * reserved explicitly under ERRATA_SPECULATIVE_AT build flag here.
+ *
+ * In situations when EL1_Context=1 and  ERRATA_SPECULATIVE_AT=1, since SCTLR_EL1
+ * and TCR_EL1 registers will be modified under errata and it happens at the
+ * early in the codeflow prior to el1 context (save and restore operations),
+ * context memory still will be reserved under the errata logic here explicitly.
+ * These registers will not be part of EL1 context save & restore routines.
+ *
+ * Only when ERRATA_SPECULATIVE_AT=0, EL1_Context=1, for this combination,
+ * SCTLR_EL1 and TCR_EL1 will be part of EL1 context structure (context_el1.h)
+ * -----------------------------------------------------------------------------
+ ******************************************************************************/
+#define CTX_ERRATA_SPEC_AT_OFFSET	(CTX_CVE_2018_3639_OFFSET + CTX_CVE_2018_3639_END)
+#if ERRATA_SPECULATIVE_AT
+#define CTX_ERRATA_SPEC_AT_SCTLR_EL1	U(0x0)
+#define CTX_ERRATA_SPEC_AT_TCR_EL1	U(0x8)
+#define CTX_ERRATA_SPEC_AT_END		U(0x10) /* Align to the next 16 byte boundary */
+#else
+#define CTX_ERRATA_SPEC_AT_END		U(0x0)
+#endif /* ERRATA_SPECULATIVE_AT */
+
+/*******************************************************************************
  * Registers related to ARMv8.3-PAuth.
  ******************************************************************************/
-#define CTX_PAUTH_REGS_OFFSET	(CTX_CVE_2018_3639_OFFSET + CTX_CVE_2018_3639_END)
+#define CTX_PAUTH_REGS_OFFSET	(CTX_ERRATA_SPEC_AT_OFFSET + CTX_ERRATA_SPEC_AT_END)
 #if CTX_INCLUDE_PAUTH_REGS
 #define CTX_PACIAKEY_LO		U(0x0)
 #define CTX_PACIAKEY_HI		U(0x8)
@@ -302,14 +176,20 @@
  * Registers initialised in a per-world context.
  ******************************************************************************/
 #define CTX_CPTR_EL3			U(0x0)
-#define CTX_ZCR_EL3			U(0x8)
-#define CTX_MPAM3_EL3			U(0x10)
-#define CTX_PERWORLD_EL3STATE_END	U(0x18)
+#define CTX_MPAM3_EL3			U(0x8)
+#if (ENABLE_FEAT_IDTE3 && IMAGE_BL31)
+#define CTX_IDREGS_EL3			U(0x10)
+#define CTX_PERWORLD_EL3STATE_END	U(0x78)
+#else
+#define CTX_PERWORLD_EL3STATE_END	U(0x10)
+#endif /* ENABLE_FEAT_IDTE3 && IMAGE_BL31 */
 
 #ifndef __ASSEMBLER__
 
 #include <stdint.h>
 
+#include <assert.h>
+#include <common/ep_info.h>
 #include <lib/cassert.h>
 
 /*
@@ -324,13 +204,13 @@
 
 /* Constants to determine the size of individual context structures */
 #define CTX_GPREG_ALL		(CTX_GPREGS_END >> DWORD_SHIFT)
-#define CTX_EL1_SYSREGS_ALL	(CTX_EL1_SYSREGS_END >> DWORD_SHIFT)
 
-#if CTX_INCLUDE_FPREGS
-# define CTX_FPREG_ALL		(CTX_FPREGS_END >> DWORD_SHIFT)
-#endif
 #define CTX_EL3STATE_ALL	(CTX_EL3STATE_END >> DWORD_SHIFT)
 #define CTX_CVE_2018_3639_ALL	(CTX_CVE_2018_3639_END >> DWORD_SHIFT)
+
+#if ERRATA_SPECULATIVE_AT
+#define CTX_ERRATA_SPEC_AT_ALL	(CTX_ERRATA_SPEC_AT_END >> DWORD_SHIFT)
+#endif
 #if CTX_INCLUDE_PAUTH_REGS
 # define CTX_PAUTH_REGS_ALL	(CTX_PAUTH_REGS_END >> DWORD_SHIFT)
 #endif
@@ -345,21 +225,6 @@
 DEFINE_REG_STRUCT(gp_regs, CTX_GPREG_ALL);
 
 /*
- * AArch64 EL1 system register context structure for preserving the
- * architectural state during world switches.
- */
-DEFINE_REG_STRUCT(el1_sysregs, CTX_EL1_SYSREGS_ALL);
-
-/*
- * AArch64 floating point register context structure for preserving
- * the floating point state during switches from one security state to
- * another.
- */
-#if CTX_INCLUDE_FPREGS
-DEFINE_REG_STRUCT(fp_regs, CTX_FPREG_ALL);
-#endif
-
-/*
  * Miscellaneous registers used by EL3 firmware to maintain its state
  * across exception entries and exits
  */
@@ -367,6 +232,11 @@ DEFINE_REG_STRUCT(el3_state, CTX_EL3STATE_ALL);
 
 /* Function pointer used by CVE-2018-3639 dynamic mitigation */
 DEFINE_REG_STRUCT(cve_2018_3639, CTX_CVE_2018_3639_ALL);
+
+/* Registers associated to Errata_Speculative */
+#if ERRATA_SPECULATIVE_AT
+DEFINE_REG_STRUCT(errata_speculative_at, CTX_ERRATA_SPEC_AT_ALL);
+#endif
 
 /* Registers associated to ARMv8.3-PAuth */
 #if CTX_INCLUDE_PAUTH_REGS
@@ -381,6 +251,24 @@ DEFINE_REG_STRUCT(pauth, CTX_PAUTH_REGS_ALL);
 #define write_ctx_reg(ctx, offset, val)	(((ctx)->ctx_regs[(offset) >> DWORD_SHIFT]) \
 					 = (uint64_t) (val))
 
+#if ENABLE_FEAT_IDTE3
+typedef struct perworld_idreg {
+	u_register_t id_aa64pfr0_el1;
+	u_register_t id_aa64pfr1_el1;
+	u_register_t id_aa64pfr2_el1;
+	u_register_t id_aa64smfr0_el1;
+	u_register_t id_aa64isar0_el1;
+	u_register_t id_aa64isar1_el1;
+	u_register_t id_aa64isar2_el1;
+	u_register_t id_aa64isar3_el1;
+	u_register_t id_aa64mmfr0_el1;
+	u_register_t id_aa64mmfr1_el1;
+	u_register_t id_aa64mmfr2_el1;
+	u_register_t id_aa64mmfr3_el1;
+	u_register_t id_aa64mmfr4_el1;
+} perworld_idregs_t;
+#endif
+
 /*
  * Top-level context structure which is used by EL3 firmware to preserve
  * the state of a core at the next lower EL in a given security state and
@@ -392,22 +280,33 @@ DEFINE_REG_STRUCT(pauth, CTX_PAUTH_REGS_ALL);
 typedef struct cpu_context {
 	gp_regs_t gpregs_ctx;
 	el3_state_t el3state_ctx;
-	el1_sysregs_t el1_sysregs_ctx;
 
-#if CTX_INCLUDE_FPREGS
-	fp_regs_t fpregs_ctx;
-#endif
 	cve_2018_3639_t cve_2018_3639_ctx;
+
+#if ERRATA_SPECULATIVE_AT
+	errata_speculative_at_t errata_speculative_at_ctx;
+#endif
 
 #if CTX_INCLUDE_PAUTH_REGS
 	pauth_t pauth_ctx;
 #endif
 
-#if CTX_INCLUDE_EL2_REGS
+#if (CTX_INCLUDE_EL2_REGS && IMAGE_BL31)
 	el2_sysregs_t el2_sysregs_ctx;
+#else
+	/* El1 context should be included only either for IMAGE_BL1,
+	 * or for IMAGE_BL31 when CTX_INCLUDE_EL2_REGS=0:
+	 * When SPMD_SPM_AT_SEL2=1, SPMC at S-EL2 takes care of saving
+	 * and restoring EL1 registers. In this case, BL31 at EL3 can
+	 * exclude save and restore of EL1 context registers.
+	 */
+	el1_sysregs_t el1_sysregs_ctx;
 #endif
 
-} cpu_context_t;
+	/* TODO: the CACHE_WRITEBACK_GRANULE alignment is not necessary if this is
+	 * contained in a per-cpu data structure (i.e. cpu_data_t).
+	 */
+} __aligned(CACHE_WRITEBACK_GRANULE) cpu_context_t;
 
 /*
  * Per-World Context.
@@ -415,23 +314,44 @@ typedef struct cpu_context {
  */
 typedef struct per_world_context {
 	uint64_t ctx_cptr_el3;
-	uint64_t ctx_zcr_el3;
 	uint64_t ctx_mpam3_el3;
+#if (ENABLE_FEAT_IDTE3 && IMAGE_BL31)
+	perworld_idregs_t idregs;
+#endif
 } per_world_context_t;
 
-extern per_world_context_t per_world_context[CPU_DATA_CONTEXT_NUM];
+static inline uint8_t get_cpu_context_index(size_t security_state)
+{
+	if (security_state == SECURE) {
+		return CPU_CONTEXT_SECURE;
+#if ENABLE_RME
+	} else  if (security_state == REALM) {
+		return CPU_CONTEXT_REALM;
+#endif
+	} else {
+		assert(security_state == NON_SECURE);
+		return CPU_CONTEXT_NS;
+	}
+}
+
+extern per_world_context_t per_world_context[CPU_CONTEXT_NUM];
 
 /* Macros to access members of the 'cpu_context_t' structure */
 #define get_el3state_ctx(h)	(&((cpu_context_t *) h)->el3state_ctx)
-#if CTX_INCLUDE_FPREGS
-# define get_fpregs_ctx(h)	(&((cpu_context_t *) h)->fpregs_ctx)
-#endif
+
+#if (CTX_INCLUDE_EL2_REGS && IMAGE_BL31)
+#define get_el2_sysregs_ctx(h)	(&((cpu_context_t *) h)->el2_sysregs_ctx)
+#else
 #define get_el1_sysregs_ctx(h)	(&((cpu_context_t *) h)->el1_sysregs_ctx)
-#if CTX_INCLUDE_EL2_REGS
-# define get_el2_sysregs_ctx(h)	(&((cpu_context_t *) h)->el2_sysregs_ctx)
 #endif
+
 #define get_gpregs_ctx(h)	(&((cpu_context_t *) h)->gpregs_ctx)
 #define get_cve_2018_3639_ctx(h)	(&((cpu_context_t *) h)->cve_2018_3639_ctx)
+
+#if ERRATA_SPECULATIVE_AT
+#define get_errata_speculative_at_ctx(h)	(&((cpu_context_t *) h)->errata_speculative_at_ctx)
+#endif
+
 #if CTX_INCLUDE_PAUTH_REGS
 # define get_pauth_ctx(h)	(&((cpu_context_t *) h)->pauth_ctx)
 #endif
@@ -447,16 +367,14 @@ CASSERT(CTX_GPREGS_OFFSET == __builtin_offsetof(cpu_context_t, gpregs_ctx),
 CASSERT(CTX_EL3STATE_OFFSET == __builtin_offsetof(cpu_context_t, el3state_ctx),
 	assert_core_context_el3state_offset_mismatch);
 
-CASSERT(CTX_EL1_SYSREGS_OFFSET == __builtin_offsetof(cpu_context_t, el1_sysregs_ctx),
-	assert_core_context_el1_sys_offset_mismatch);
-
-#if CTX_INCLUDE_FPREGS
-CASSERT(CTX_FPREGS_OFFSET == __builtin_offsetof(cpu_context_t, fpregs_ctx),
-	assert_core_context_fp_offset_mismatch);
-#endif /* CTX_INCLUDE_FPREGS */
 
 CASSERT(CTX_CVE_2018_3639_OFFSET == __builtin_offsetof(cpu_context_t, cve_2018_3639_ctx),
 	assert_core_context_cve_2018_3639_offset_mismatch);
+
+#if ERRATA_SPECULATIVE_AT
+CASSERT(CTX_ERRATA_SPEC_AT_OFFSET == __builtin_offsetof(cpu_context_t, errata_speculative_at_ctx),
+	assert_core_context_errata_speculative_at_offset_mismatch);
+#endif
 
 #if CTX_INCLUDE_PAUTH_REGS
 CASSERT(CTX_PAUTH_REGS_OFFSET == __builtin_offsetof(cpu_context_t, pauth_ctx),
@@ -503,9 +421,72 @@ CASSERT(CTX_PAUTH_REGS_OFFSET == __builtin_offsetof(cpu_context_t, pauth_ctx),
  * Function prototypes
  ******************************************************************************/
 #if CTX_INCLUDE_FPREGS
-void fpregs_context_save(fp_regs_t *regs);
-void fpregs_context_restore(fp_regs_t *regs);
+void fpregs_context_save(simd_regs_t *regs);
+void fpregs_context_restore(simd_regs_t *regs);
 #endif
+
+/*******************************************************************************
+ * The next four inline functions are required for IMAGE_BL1, as well as for
+ * IMAGE_BL31 for the below combinations.
+ * ============================================================================
+ * | ERRATA_SPECULATIVE_AT| CTX_INCLUDE_EL2_REGS |   Combination              |
+ * ============================================================================
+ * |       0              |       0              |   Valid (EL1 ctx)          |
+ * |______________________|______________________|____________________________|
+ * |                      |                      | Invalid (No Errata/EL1 Ctx)|
+ * |       0              |       1              | Hence commented out.       |
+ * |______________________|______________________|____________________________|
+ * |                      |                      |                            |
+ * |       1              |       0              |   Valid (Errata ctx)       |
+ * |______________________|______________________|____________________________|
+ * |                      |                      |                            |
+ * |       1              |       1              |   Valid (Errata ctx)       |
+ * |______________________|______________________|____________________________|
+ * ============================================================================
+ ******************************************************************************/
+#if (IMAGE_BL1 || ((ERRATA_SPECULATIVE_AT) || (!CTX_INCLUDE_EL2_REGS)))
+
+static inline void write_ctx_sctlr_el1_reg_errata(cpu_context_t *ctx, u_register_t val)
+{
+#if (ERRATA_SPECULATIVE_AT)
+	write_ctx_reg(get_errata_speculative_at_ctx(ctx),
+		      CTX_ERRATA_SPEC_AT_SCTLR_EL1, val);
+#else
+	write_el1_ctx_common(get_el1_sysregs_ctx(ctx), sctlr_el1, val);
+#endif /* ERRATA_SPECULATIVE_AT */
+}
+
+static inline void write_ctx_tcr_el1_reg_errata(cpu_context_t *ctx, u_register_t val)
+{
+#if (ERRATA_SPECULATIVE_AT)
+	write_ctx_reg(get_errata_speculative_at_ctx(ctx),
+		      CTX_ERRATA_SPEC_AT_TCR_EL1, val);
+#else
+	write_el1_ctx_common(get_el1_sysregs_ctx(ctx), tcr_el1, val);
+#endif /* ERRATA_SPECULATIVE_AT */
+}
+
+static inline u_register_t read_ctx_sctlr_el1_reg_errata(cpu_context_t *ctx)
+{
+#if (ERRATA_SPECULATIVE_AT)
+	return read_ctx_reg(get_errata_speculative_at_ctx(ctx),
+		      CTX_ERRATA_SPEC_AT_SCTLR_EL1);
+#else
+	return read_el1_ctx_common(get_el1_sysregs_ctx(ctx), sctlr_el1);
+#endif /* ERRATA_SPECULATIVE_AT */
+}
+
+static inline u_register_t read_ctx_tcr_el1_reg_errata(cpu_context_t *ctx)
+{
+#if (ERRATA_SPECULATIVE_AT)
+	return read_ctx_reg(get_errata_speculative_at_ctx(ctx),
+		      CTX_ERRATA_SPEC_AT_TCR_EL1);
+#else
+	return read_el1_ctx_common(get_el1_sysregs_ctx(ctx), tcr_el1);
+#endif /* ERRATA_SPECULATIVE_AT */
+}
+
+#endif /* (IMAGE_BL1 || ((ERRATA_SPECULATIVE_AT) || (!CTX_INCLUDE_EL2_REGS))) */
 
 #endif /* __ASSEMBLER__ */
 

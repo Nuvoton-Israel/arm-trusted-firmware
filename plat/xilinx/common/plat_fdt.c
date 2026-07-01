@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Advanced Micro Devices, Inc. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -37,16 +37,15 @@ int32_t is_valid_dtb(void *fdt)
 {
 	int32_t ret = 0;
 
-	if (fdt_check_header(fdt) != 0) {
+	ret = fdt_check_header(fdt);
+	if (ret != 0) {
 		ERROR("Can't read DT at %p\n", fdt);
-		ret = -FDT_ERR_NOTFOUND;
 		goto error;
 	}
 
 	ret = fdt_open_into(fdt, fdt, XILINX_OF_BOARD_DTB_MAX_SIZE);
 	if (ret < 0) {
 		ERROR("Invalid Device Tree at %p: error %d\n", fdt, ret);
-		ret = -FDT_ERR_NOTFOUND;
 		goto error;
 	}
 
@@ -86,6 +85,18 @@ static int remove_mmap_dynamic_region(uintptr_t base_va, size_t size)
 }
 #endif
 
+#if defined(XILINX_OF_BOARD_DTB_ADDR)
+static int check_fdt_reserved_memory(void *dtb, const char *node_name)
+{
+	int offset = fdt_path_offset(dtb, "/reserved-memory");
+
+	if (offset >= 0) {
+		offset = fdt_subnode_offset(dtb, offset, node_name);
+	}
+	return offset;
+}
+#endif
+
 void prepare_dtb(void)
 {
 #if defined(XILINX_OF_BOARD_DTB_ADDR)
@@ -93,7 +104,7 @@ void prepare_dtb(void)
 	int map_ret = 0;
 	int ret = 0;
 
-	dtb = (void *)XILINX_OF_BOARD_DTB_ADDR;
+	dtb = (void *)plat_retrieve_dt_addr();
 
 	if (!IS_TFA_IN_OCM(BL31_BASE)) {
 
@@ -112,12 +123,19 @@ void prepare_dtb(void)
 					WARN("Failed to add PSCI cpu enable methods in DT\n");
 				}
 
-				/* Reserve memory used by Trusted Firmware. */
-				ret = fdt_add_reserved_memory(dtb, "tf-a",
-							      BL31_BASE,
-							      BL31_LIMIT - BL31_BASE);
+				/* Check reserved memory set in DT*/
+				ret = check_fdt_reserved_memory(dtb, "tf-a");
 				if (ret < 0) {
-					WARN("Failed to add reserved memory nodes for BL31 to DT.\n");
+					/* Reserve memory used by Trusted Firmware. */
+					ret = fdt_add_reserved_memory(dtb, "tf-a",
+							BL31_BASE,
+							BL31_LIMIT - BL31_BASE);
+					if (ret < 0) {
+						WARN("Failed to add reserved memory nodes for BL31 to DT.\n");
+					}
+
+				} else {
+					WARN("Reserved memory pre-exists in DT.\n");
 				}
 
 				ret = fdt_pack(dtb);
@@ -137,4 +155,14 @@ void prepare_dtb(void)
 		}
 	}
 #endif
+}
+
+uintptr_t plat_retrieve_dt_addr(void)
+{
+	void *dtb = NULL;
+
+#if defined(XILINX_OF_BOARD_DTB_ADDR)
+	dtb = (void *)XILINX_OF_BOARD_DTB_ADDR;
+#endif
+	return (uintptr_t)dtb;
 }
