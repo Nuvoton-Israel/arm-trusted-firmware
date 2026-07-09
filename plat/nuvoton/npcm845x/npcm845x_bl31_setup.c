@@ -301,6 +301,14 @@ void bl31_platform_setup(void)
 #if USE_DEBUGFS
 	debugfs_init();
 #endif /* USE_DEBUGFS */
+
+#if BL31_SELFTEST
+	npcm845x_run_selftests();
+	NOTICE("BL31 selftests complete — system halted.\n");
+	console_flush();
+	for (;;)
+		wfi();
+#endif /* BL31_SELFTEST */
 }
 
 void arm_console_runtime_init(void)

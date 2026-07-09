@@ -43,4 +43,8 @@ void npcm845x_pwr_domain_suspend(const psci_power_state_t *target_state);
 void npcm845x_pwr_domain_off(const psci_power_state_t *target_state);
 void __init npcm845x_bl31_plat_arch_setup(void);
 
+#if BL31_SELFTEST
+void npcm845x_run_selftests(void);
+#endif
+
 #endif /* PLAT_NPCM845X_H */

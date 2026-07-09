@@ -397,5 +397,15 @@ BL2U_SOURCES	:=
 DEBUG_CONSOLE	?=	0
 $(eval $(call add_define,DEBUG_CONSOLE))
 
+# Enable BL31 platform self-tests (run at EL3, halt after results)
+# Build with: make ... BL31_SELFTEST=1
+BL31_SELFTEST	?=	0
+$(eval $(call assert_boolean,BL31_SELFTEST))
+$(eval $(call add_define,BL31_SELFTEST))
+
+ifeq (${BL31_SELFTEST},1)
+BL31_SOURCES	+=	plat/nuvoton/npcm845x/npcm845x_tests.c
+endif
+
 $(eval $(call add_define,ARM_TSP_RAM_LOCATION_ID))
 
