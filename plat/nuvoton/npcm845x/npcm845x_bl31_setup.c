@@ -301,7 +301,20 @@ void bl31_platform_setup(void)
 #if USE_DEBUGFS
 	debugfs_init();
 #endif /* USE_DEBUGFS */
+}
 
+void arm_console_runtime_init(void)
+{
+/* Added in order to ignore the original weak function */
+}
+
+/*
+ * Override the ARM weak bl31_plat_runtime_setup().
+ * Called after all runtime services (including PSCI) are initialized,
+ * just before the BL32/BL33 handoff.
+ */
+void bl31_plat_runtime_setup(void)
+{
 #if BL31_SELFTEST
 	npcm845x_run_selftests();
 	NOTICE("BL31 selftests complete — system halted.\n");
@@ -309,11 +322,7 @@ void bl31_platform_setup(void)
 	for (;;)
 		wfi();
 #endif /* BL31_SELFTEST */
-}
-
-void arm_console_runtime_init(void)
-{
-/* Added in order to ignore the original weak function */
+	console_switch_state(CONSOLE_FLAG_RUNTIME);
 }
 
 void plat_arm_program_trusted_mailbox(uintptr_t address)

@@ -10,10 +10,12 @@
 
 #include <stdint.h>
 
+#include <arch.h>
 #include <arch_helpers.h>
 #include <common/debug.h>
 #include <drivers/console.h>
 #include <lib/mmio.h>
+#include <lib/psci/psci.h>
 #include <plat/common/platform.h>
 #include <platform_def.h>
 
@@ -143,7 +145,60 @@ static int test_cpu_mpidr(void)
 }
 
 /* ------------------------------------------------------------------ */
-/* Test: GIC-400 topology (GICD_TYPER)                                */
+/* Test: PSCI reports secondary CPUs as OFF after BL31 init           */
+/*                                                                     */
+/* Called from bl31_plat_runtime_setup() — PSCI is fully initialized. */
+/* ------------------------------------------------------------------ */
+static int test_psci_affinity_states(void)
+{
+	unsigned int cpu;
+
+	for (cpu = 1U; cpu < PLATFORM_CORE_COUNT; cpu++) {
+		/* MPIDR for CPU n on NPCM845x: AFF1=0, AFF0=n */
+		u_register_t mpidr = (u_register_t)cpu;
+		int state = psci_affinity_info(mpidr, MPIDR_AFFLVL0);
+
+		if (state != (int)AFF_STATE_OFF) {
+			NOTICE("  INFO  CPU%u PSCI state=%d (expected OFF=%d)\n",
+			       cpu, state, AFF_STATE_OFF);
+			return SELFTEST_FAIL;
+		}
+	}
+	return SELFTEST_PASS;
+}
+
+/* ------------------------------------------------------------------ */
+/* Test: EL3 physical timer (CNTP) ISTATUS fires within timeout       */
+/* ------------------------------------------------------------------ */
+static int test_el3_physical_timer(void)
+{
+	uint64_t freq = read_cntfrq_el0();
+	uint64_t deadline;
+
+	if (freq == 0ULL)
+		freq = 25000000ULL;
+
+	write_cntp_ctl_el0(0);          /* disable */
+	isb();
+	/* Set compare value ~1 ms ahead */
+	write_cntp_cval_el0(read_cntpct_el0() + freq / 1000U);
+	write_cntp_ctl_el0(1);          /* ENABLE=1, IMASK=0 */
+	isb();
+
+	/* Wait for ISTATUS (bit 2) within 100 ms */
+	deadline = read_cntpct_el0() + freq / 10U;
+	while ((read_cntp_ctl_el0() & BIT_64(2)) == 0U) {
+		if (read_cntpct_el0() > deadline) {
+			write_cntp_ctl_el0(0);
+			return SELFTEST_FAIL;
+		}
+	}
+
+	write_cntp_ctl_el0(0);
+	return SELFTEST_PASS;
+}
+
+
 /* ------------------------------------------------------------------ */
 static int test_gic_topology(void)
 {
@@ -295,9 +350,11 @@ void npcm845x_run_selftests(void)
 	RUN_TEST("GIC-400 topology",         test_gic_topology);
 	RUN_TEST("Generic timer counting",   test_timer_counting);
 	RUN_TEST("Generic timer frequency",  test_timer_frequency);
+	RUN_TEST("EL3 physical timer ISTATUS", test_el3_physical_timer);
 	RUN_TEST("System counter enabled",   test_system_counter_enabled);
 	RUN_TEST("DRAM read/write pattern",  test_dram_pattern);
 	RUN_TEST("CPU0 MPIDR / core_pos",    test_cpu_mpidr);
+	RUN_TEST("PSCI CPUs 1-3 state OFF",  test_psci_affinity_states);
 	RUN_TEST("CPU1 mailbox bringup",     test_cpu1_bringup);
 	RUN_TEST("CPU2 mailbox bringup",     test_cpu2_bringup);
 	RUN_TEST("CPU3 mailbox bringup",     test_cpu3_bringup);
