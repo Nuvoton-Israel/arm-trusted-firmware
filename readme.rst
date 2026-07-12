@@ -31,6 +31,20 @@ More Info and Documentation
 To find out more about Trusted Firmware-A, please `view the full documentation`_
 that is available through `trustedfirmware.org`_.
 
+NPCM845x test additions
+-----------------------
+
+This repository branch includes NPCM845x-specific validation additions:
+
+- BL31 EL3 self-tests in ``plat/nuvoton/npcm845x/npcm845x_tests.c``.
+  Enable with ``BL31_SELFTEST=1`` at build time. The test runner executes at
+  BL31 runtime setup and halts after printing a pass/fail summary.
+- PSCI CPU_OFF/warm-boot handoff fix in ``plat/nuvoton/npcm845x/npcm845x_psci.c``,
+  required for stable multi-core bring-up and affinity transitions in runtime
+  tests.
+- Hardware-validated TFTF flow (BL33) on NPCM845x through the existing IGPS
+  packaging/programming process.
+
 --------------
 
 *Copyright (c) 2013-2019, Arm Limited and Contributors. All rights reserved.*
@@ -48,5 +62,4 @@ that is available through `trustedfirmware.org`_.
 .. _Arm A-Profile architectures: https://developer.arm.com/architectures/cpu-architecture/a-profile
 .. _view the full documentation: https://www.trustedfirmware.org/docs/tf-a
 .. _trustedfirmware.org: http://www.trustedfirmware.org
-
 
