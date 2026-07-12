@@ -513,23 +513,22 @@ void __dead2 npcm845x_pwr_down_wfi(
 
 	if (pos == 0) {
 		/*
-		 * The secondaries will always be in a wait
-		 * for warm boot on reset, but the BSP needs
-		 * to be able to distinguish between waiting
-		 * for warm boot (e.g. after psci_off, waiting
-		 * for psci_on) and a cold boot.
+		 * Signal that the BSP has powered down.  Distinguishes a warm
+		 * reboot (waiting for psci_on) from a cold boot.
 		 */
 		mmio_write_64(hold_base, PLAT_NPCM_TM_HOLD_STATE_BSP_OFF);
-		/* No cache maintenance here, we run with caches off already. */
 		dsb();
 		isb();
 	}
 
-	wfe();
-
-	while (1) {
-		;
-	}
+	/*
+	 * Enter the Nuvoton TM_HOLD warm-boot wait loop.  The CPU spins here
+	 * until npcm845x_pwr_domain_on() writes HOLD_STATE_GO to its slot and
+	 * issues SEV, at which point execution resumes at the PSCI warm-boot
+	 * entry point.  This replaces the previous wfe()+while(1) stub which
+	 * did not re-enter the hold loop and so prevented subsequent CPU_ON.
+	 */
+	plat_secondary_cold_boot_setup();
 }
 
 /*******************************************************************************
@@ -538,15 +537,16 @@ void __dead2 npcm845x_pwr_down_wfi(
  ******************************************************************************/
 void npcm845x_pwr_domain_off(const psci_power_state_t *target_state)
 {
-	NOTICE("%s() nuvoton_psci\n", __func__);
-
-	for (size_t i = 0; (uint64_t)i <= PLAT_MAX_PWR_LVL; i++) {
-		INFO("%s: target_state->pwr_domain_state[%lu]=%x\n",
-			__func__, i, target_state->pwr_domain_state[i]);
-	}
-
+	/*
+	 * Mark the CPU offline in the platform tracking and disable the GIC
+	 * CPU interface.  Do NOT jump to plat_secondary_cold_boot_setup() here
+	 * — the PSCI framework must be allowed to update the affinity-info
+	 * state to OFF before the CPU enters its wait-for-wakeup loop.
+	 * The warm-boot spin loop is entered via pwr_domain_pwr_down_wfi()
+	 * below so that PSCI AFFINITY_INFO returns OFF correctly.
+	 */
 	npcm845x_mark_cpu_offline(plat_my_core_pos());
-	plat_secondary_cold_boot_setup();
+	gicv2_cpuif_disable();
 }
 
 static const plat_psci_ops_t npcm845x_plat_psci_ops = {
